@@ -25,33 +25,95 @@ export interface DeterministicResult {
   matchedKeywords: string[]
 }
 
-/**
- * Keyword seeds (English + Hebrew). RONY-9 owner: expand these and/or turn
- * them into tuned Regex patterns. Kept as an exported constant so they are
- * easy to unit-test independently.
- */
-export const INVOICE_KEYWORDS: readonly string[] = [
+/* ------------------------------------------------------------------ *
+ * Keyword list (English + Hebrew).
+ *
+ * Grouped by language for readability, then flattened into the exported
+ * `INVOICE_KEYWORDS` constant. To extend the engine, just add a term to the
+ * relevant group below — no other code changes needed; each term is compiled
+ * into a case-insensitive Regex automatically.
+ *
+ * Keep terms lower-case and trimmed. Multi-word terms (e.g. "tax invoice")
+ * match across any run of whitespace, so "tax   invoice" still matches.
+ * ------------------------------------------------------------------ */
+
+const ENGLISH_KEYWORDS = [
   'invoice',
-  'receipt',
   'tax invoice',
-  'חשבונית',
-  'קבלה',
-  'חשבונית מס'
+  'receipt',
+  'bill',
+  'payment receipt',
+  'sales receipt',
+  'purchase invoice',
+  'order confirmation'
+] as const
+
+const HEBREW_KEYWORDS = [
+  'חשבונית', // invoice
+  'חשבונית מס', // tax invoice
+  'חשבון עסקה', // transaction/proforma invoice
+  'קבלה', // receipt
+  'אישור תשלום', // payment confirmation
+  'דרישת תשלום' // payment demand
+] as const
+
+/** Flat, de-duplicated keyword list the engine matches against. */
+export const INVOICE_KEYWORDS: readonly string[] = [
+  ...new Set<string>([...ENGLISH_KEYWORDS, ...HEBREW_KEYWORDS])
 ]
 
+/** True if the term contains Latin letters (so we treat it as an English term). */
+function hasLatinLetters(term: string): boolean {
+  return /[a-z]/i.test(term)
+}
+
 /**
- * Decide whether an email is an invoice/receipt.
+ * Compile one keyword into a matcher Regex:
+ *  - escape any Regex metacharacters in the term,
+ *  - allow any whitespace run between words ("tax invoice" → /tax\s+invoice/),
+ *  - flags: `i` (case-insensitive, for Latin) + `u` (Unicode, for Hebrew).
  *
- * TODO(RONY-9): implement the real matching:
- *   - normalise / lower-case the text,
- *   - run keyword + Regex matching over subject, body, and each filename,
- *   - collect every distinct match into `matchedKeywords`,
- *   - return isInvoice = matchedKeywords.length > 0 (or your tuned threshold).
+ * Boundary handling differs by language ON PURPOSE:
+ *  - English terms are wrapped in Unicode-aware "letter boundaries"
+ *    `(?<=\P{L}|^) … (?=\P{L}|$)` so short words don't match inside longer
+ *    ones — e.g. "bill" no longer fires on "billing"/"billion"/"Bill Gates".
+ *    (We avoid `\b`, which is ASCII-only and misbehaves around Hebrew.)
+ *  - Hebrew terms are matched as substrings (no boundary), because Hebrew
+ *    glues prefixes onto nouns — "החשבונית" (the invoice), "וקבלה" (and a
+ *    receipt) — and a boundary would make those legitimate forms miss.
+ */
+function compileKeyword(keyword: string): RegExp {
+  const escaped = keyword
+    .trim()
+    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    .replace(/\s+/g, '\\s+')
+  const pattern = hasLatinLetters(keyword) ? `(?<=\\P{L}|^)${escaped}(?=\\P{L}|$)` : escaped
+  return new RegExp(pattern, 'iu')
+}
+
+/** Pre-compiled (keyword, pattern) pairs — built once at module load. */
+const KEYWORD_PATTERNS: ReadonlyArray<{ keyword: string; pattern: RegExp }> = INVOICE_KEYWORDS.map(
+  (keyword) => ({ keyword, pattern: compileKeyword(keyword) })
+)
+
+/**
+ * Decide whether an email is an invoice/receipt by matching the predefined
+ * keywords (as Regex) against the subject, body, and every attachment filename.
  *
  * DoD: running this on a fixed string finds a match by the predefined keywords.
  */
 export function classifyDeterministic(input: DeterministicInput): DeterministicResult {
-  void input
-  // Placeholder so the Step-0 contract compiles until RONY-9 fills it in.
-  return { isInvoice: false, matchedKeywords: [] }
+  // TODO(RONY-7): when real Gmail messages arrive, the body will be raw HTML
+  // and/or base64-encoded parts. Strip HTML tags and decode/drop base64 blobs
+  // BEFORE building the haystack — otherwise we match noise and pay a big perf
+  // cost scanning huge encoded strings. Pass clean plain text into this engine.
+  const haystack = [input.subject, input.body, ...input.filenames]
+    .filter((part): part is string => Boolean(part))
+    .join('\n')
+
+  const matchedKeywords = KEYWORD_PATTERNS.filter(({ pattern }) => pattern.test(haystack)).map(
+    ({ keyword }) => keyword
+  )
+
+  return { isInvoice: matchedKeywords.length > 0, matchedKeywords }
 }
