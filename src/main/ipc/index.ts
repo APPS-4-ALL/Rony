@@ -1,19 +1,20 @@
 import { writeFile } from 'node:fs/promises'
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { IpcChannels } from '../../shared/ipc'
-import type { AuthStatus, SaveFileRequest, ScanResult, Settings } from '../../shared/types'
+import type { SaveFileRequest, ScanResult, Settings } from '../../shared/types'
 import { countInvoices, insertInvoice, listInvoices } from '../db'
+import { getAuthStatus, login, logout } from '../auth'
 
 /* ------------------------------------------------------------------ *
- * Step-0 STUB state.
+ * Remaining Step-0 STUB state (settings + scan).
  *
  * These in-memory values let the renderer (Person B) build and visually
- * test every UI state — connected/disconnected, engine choice, scan
- * loading — BEFORE the real backend lands. Person A replaces each stub
- * body with the real implementation (RONY-6/7/9/10/11) without changing
+ * test every UI state BEFORE the real backend lands. Person A replaces each
+ * stub body with the real implementation (RONY-7/9/10/11) without changing
  * the channel names or return shapes, so the frontend keeps working.
+ *
+ * Auth (RONY-6) is now REAL — see ../auth.
  * ------------------------------------------------------------------ */
-let stubAuth: AuthStatus = { connected: false, email: null }
 let stubSettings: Settings = { defaultEngine: 'deterministic' }
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
@@ -44,18 +45,10 @@ export function registerIpcHandlers(): void {
     })
   )
 
-  // --- Auth (STUB → RONY-6) ---
-  // Toggles in-memory so Person B can test both connected + disconnected UI.
-  ipcMain.handle(IpcChannels.authStatus, (): AuthStatus => stubAuth)
-  ipcMain.handle(IpcChannels.authLogin, async (): Promise<AuthStatus> => {
-    await sleep(400) // mimic the browser round-trip
-    stubAuth = { connected: true, email: 'you@example.com' }
-    return stubAuth
-  })
-  ipcMain.handle(IpcChannels.authLogout, (): AuthStatus => {
-    stubAuth = { connected: false, email: null }
-    return stubAuth
-  })
+  // --- Auth (REAL — RONY-6) ---
+  ipcMain.handle(IpcChannels.authStatus, () => getAuthStatus())
+  ipcMain.handle(IpcChannels.authLogin, () => login())
+  ipcMain.handle(IpcChannels.authLogout, () => logout())
 
   // --- Settings (STUB → RONY-12 persistence) ---
   ipcMain.handle(IpcChannels.settingsGet, (): Settings => stubSettings)
