@@ -40,9 +40,43 @@ Download the latest `.exe` installer from [GitHub Releases](https://github.com/s
 **Requirements:** Node.js 18+, npm 9+ (or yarn/pnpm)
 
 ```bash
-git clone [https://github.com/shbh8205-lgtm/invoice-scanner-rony.git](https://github.com/shbh8205-lgtm/invoice-scanner-rony.git)
+git clone https://github.com/shbh8205-lgtm/invoice-scanner-rony.git
 cd invoice-scanner-rony
 npm install
 npm run dev
-To build a distributable installer:Bashnpm run build
-The installer will be generated in your release directory.Tech StackLayerChoiceShellElectron (latest stable)Build Toolelectron-viteLanguageTypeScript (strict) / JavaScriptUIVue 3 (Composition API)StylingTailwind CSSDatabaseSQLite (via better-sqlite3 or native driver)Google APIsgoogleapis + google-auth-library (Gmail API OAuth 2.0)AI IntegrationLLM API Client (Structured JSON Outputs)PrivacyRony collects no telemetry. Your emails, credentials, token files, and downloaded invoices are stored entirely locally on your hard drive.LicenseMIT — free to use, audit, fork, and self-host.
+```
+
+To build a distributable installer:
+
+```bash
+npm run build
+```
+
+The installer will be generated in your release directory.
+
+---
+
+## Tech Stack
+
+| Layer | Choice |
+| --- | --- |
+| Shell | Electron (latest stable) |
+| Build Tool | electron-vite |
+| Language | TypeScript (strict) / JavaScript |
+| UI | Vue 3 (Composition API) |
+| Styling | Tailwind CSS |
+| Database | SQLite (via better-sqlite3) |
+| Google APIs | googleapis + google-auth-library (Gmail API OAuth 2.0) |
+| AI Integration | LLM API Client (Structured JSON Outputs) |
+
+---
+
+## Privacy
+
+Rony collects no telemetry. Your emails, credentials, token files, and downloaded invoices are stored entirely locally on your hard drive.
+
+---
+
+## License
+
+MIT — free to use, audit, fork, and self-host.

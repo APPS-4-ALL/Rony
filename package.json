@@ -1,10 +1,10 @@
 {
   "name": "roni-invoices",
   "version": "1.0.0",
-  "description": "An Electron application with Vue and TypeScript",
+  "description": "Local-first desktop app to scan, download, and manage invoices and receipts from Gmail.",
   "main": "./out/main/index.js",
-  "author": "example.com",
-  "homepage": "https://electron-vite.org",
+  "author": "apps4all",
+  "homepage": "https://github.com/shbh8205-lgtm/invoice-scanner-rony",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
