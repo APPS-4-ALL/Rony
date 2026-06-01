@@ -7,7 +7,15 @@ export const IpcChannels = {
   ping: 'app:ping',
   invoicesList: 'invoices:list',
   invoicesCount: 'invoices:count',
-  invoicesAddSample: 'invoices:addSample'
+  invoicesAddSample: 'invoices:addSample',
+  // --- Step-0 contract additions ---
+  authStatus: 'auth:status',
+  authLogin: 'auth:login',
+  authLogout: 'auth:logout',
+  settingsGet: 'settings:get',
+  settingsSet: 'settings:set',
+  scanRun: 'scan:run',
+  dialogSaveFile: 'dialog:saveFile'
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]
