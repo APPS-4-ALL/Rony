@@ -12,6 +12,21 @@ const api: RoniApi = {
     list: () => ipcRenderer.invoke(IpcChannels.invoicesList),
     count: () => ipcRenderer.invoke(IpcChannels.invoicesCount),
     addSample: () => ipcRenderer.invoke(IpcChannels.invoicesAddSample)
+  },
+  auth: {
+    status: () => ipcRenderer.invoke(IpcChannels.authStatus),
+    login: () => ipcRenderer.invoke(IpcChannels.authLogin),
+    logout: () => ipcRenderer.invoke(IpcChannels.authLogout)
+  },
+  settings: {
+    get: () => ipcRenderer.invoke(IpcChannels.settingsGet),
+    set: (patch) => ipcRenderer.invoke(IpcChannels.settingsSet, patch)
+  },
+  scan: {
+    run: () => ipcRenderer.invoke(IpcChannels.scanRun)
+  },
+  dialog: {
+    saveFile: (req) => ipcRenderer.invoke(IpcChannels.dialogSaveFile, req)
   }
 }
 
