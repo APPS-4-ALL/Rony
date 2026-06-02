@@ -2,6 +2,7 @@ import { writeFile } from 'node:fs/promises'
 import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { IpcChannels } from '../../shared/ipc'
 import type { AiProvider, SaveFileRequest, ScanResult, Settings } from '../../shared/types'
+import { sanitizeScanOptions } from '../scan/options'
 import { countInvoices, getInvoiceById, insertInvoice, listInvoices } from '../db'
 import { getAuthStatus, login, logout } from '../auth'
 import { fetchEmails } from '../gmail'
@@ -97,7 +98,7 @@ export function registerIpcHandlers(): void {
   // selected in settings (RONY-9 deterministic OR RONY-10 AI), then download the
   // matched emails' PDF/image attachments and record them in SQLite (RONY-11).
   // Triggered by the RONY-14 "Scan now" button.
-  ipcMain.handle(IpcChannels.scanRun, async (): Promise<ScanResult> => {
+  ipcMain.handle(IpcChannels.scanRun, async (_e, rawOpts: unknown): Promise<ScanResult> => {
     // Use the user's persisted engine + provider choice (RONY-12/16).
     const { defaultEngine: engine, aiProvider } = getSettings()
 
@@ -106,7 +107,9 @@ export function registerIpcHandlers(): void {
     const aiApiKey = engine === 'ai' ? getApiKey(aiProvider) : undefined
     if (engine === 'ai' && !aiApiKey) getProviderConfig(aiProvider)
 
-    const { emails, errors: fetchErrors } = await fetchEmails()
+    // Per-run controls from the UI (count + date range), validated here since
+    // the renderer is untrusted; invalid fields fall back to engine defaults.
+    const { emails, errors: fetchErrors } = await fetchEmails(sanitizeScanOptions(rawOpts))
 
     const { approved, errors: classifyErrors } = await selectApproved(emails, engine, {
       deterministic: (email) => classifyDeterministic(toDeterministicInput(email)).isInvoice,

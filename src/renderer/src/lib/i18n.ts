@@ -54,6 +54,10 @@ const en = {
   'scan.matched': 'matched',
   'scan.downloaded': 'downloaded',
   'scan.errors': '{count} errors',
+  'scan.maxLabel': 'Max messages',
+  'scan.fromLabel': 'From',
+  'scan.toLabel': 'To',
+  'scan.rangeHint': 'Leave dates empty to scan the last year.',
 
   // Invoices table
   'table.title': 'Invoices',
@@ -156,6 +160,10 @@ const he: Record<MessageKey, string> = {
   'scan.matched': 'התאמות',
   'scan.downloaded': 'הורדו',
   'scan.errors': '{count} שגיאות',
+  'scan.maxLabel': 'מספר הודעות מרבי',
+  'scan.fromLabel': 'מתאריך',
+  'scan.toLabel': 'עד תאריך',
+  'scan.rangeHint': 'השאר/י את התאריכים ריקים כדי לסרוק את השנה האחרונה.',
 
   'table.title': 'חשבוניות',
   'table.search': 'סינון לפי ספק, תאריך, סכום…',

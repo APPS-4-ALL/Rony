@@ -27,7 +27,7 @@ const api: RoniApi = {
     clearApiKey: (provider) => ipcRenderer.invoke(IpcChannels.settingsClearApiKey, provider)
   },
   scan: {
-    run: () => ipcRenderer.invoke(IpcChannels.scanRun)
+    run: (opts) => ipcRenderer.invoke(IpcChannels.scanRun, opts)
   },
   dialog: {
     saveFile: (req) => ipcRenderer.invoke(IpcChannels.dialogSaveFile, req)

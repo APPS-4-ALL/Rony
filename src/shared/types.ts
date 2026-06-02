@@ -61,6 +61,20 @@ export interface Settings {
   locale: Locale
 }
 
+/**
+ * Per-run scan controls, chosen in the UI (max messages + optional date range).
+ * All fields are optional — an omitted field falls back to the engine default
+ * (50 messages, last 1 year).
+ */
+export interface ScanOptions {
+  /** Hard cap on how many messages to pull in one run. */
+  maxResults?: number
+  /** Lower date bound, inclusive (ISO `YYYY-MM-DD`). */
+  after?: string
+  /** Upper date bound, exclusive (ISO `YYYY-MM-DD`). */
+  before?: string
+}
+
 /** Summary returned when a scan finishes (RONY-14 shows this on completion). */
 export interface ScanResult {
   /** Emails inspected. */
@@ -129,8 +143,12 @@ export interface RoniApi {
   }
   /** Gmail sync + scan pipeline (RONY-7/9/10/11, triggered by RONY-14). */
   scan: {
-    /** Run a full scan in the background; resolves with a summary. */
-    run: () => Promise<ScanResult>
+    /**
+     * Run a full scan in the background; resolves with a summary. Optional
+     * `opts` let the user cap the message count and/or restrict the date range
+     * for this run; omitted fields use the engine defaults.
+     */
+    run: (opts?: ScanOptions) => Promise<ScanResult>
   }
   /** Native OS dialogs (RONY-15). */
   dialog: {

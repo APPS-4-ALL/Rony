@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import type { Invoice, ScanResult } from '@shared/types'
+import type { Invoice, ScanOptions, ScanResult } from '@shared/types'
 import InvoicesTable from './components/InvoicesTable.vue'
 import SettingsView from './components/SettingsView.vue'
 import { useI18n } from './lib/useI18n'
@@ -26,6 +26,21 @@ const scanning = ref(false)
 const scanSummary = ref<ScanResult | null>(null)
 const scanError = ref<string>('')
 
+// Per-run scan controls (count + optional date range). Empty dates → the
+// engine's default 1-year look-back; the main process re-validates these.
+const scanMax = ref<number>(50)
+const scanFrom = ref<string>('')
+const scanTo = ref<string>('')
+
+/** Build the options payload, omitting blank/invalid fields. */
+function scanOptions(): ScanOptions {
+  const opts: ScanOptions = {}
+  if (Number.isFinite(scanMax.value) && scanMax.value > 0) opts.maxResults = scanMax.value
+  if (scanFrom.value) opts.after = scanFrom.value
+  if (scanTo.value) opts.before = scanTo.value
+  return opts
+}
+
 /**
  * Run a Gmail scan in the background (RONY-14). Shows a loading state, then
  * refreshes the table from SQLite on completion. Errors are surfaced inline so
@@ -37,7 +52,7 @@ async function onScan(): Promise<void> {
   scanError.value = ''
   scanSummary.value = null
   try {
-    scanSummary.value = await window.api.scan.run()
+    scanSummary.value = await window.api.scan.run(scanOptions())
     await refresh()
   } catch (e) {
     scanError.value = e instanceof Error ? e.message : String(e)
@@ -217,6 +232,40 @@ onMounted(() =>
               {{ scanning ? t('scan.scanning') : t('scan.now') }}
             </button>
           </div>
+
+          <!-- Per-run controls: message cap + optional date range -->
+          <div class="mt-4 flex flex-wrap items-end gap-4">
+            <label class="text-sm text-slate-400">
+              <span class="mb-1 block">{{ t('scan.maxLabel') }}</span>
+              <input
+                v-model.number="scanMax"
+                type="number"
+                min="1"
+                max="1000"
+                :disabled="scanning"
+                class="w-28 rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none disabled:opacity-50"
+              />
+            </label>
+            <label class="text-sm text-slate-400">
+              <span class="mb-1 block">{{ t('scan.fromLabel') }}</span>
+              <input
+                v-model="scanFrom"
+                type="date"
+                :disabled="scanning"
+                class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none disabled:opacity-50"
+              />
+            </label>
+            <label class="text-sm text-slate-400">
+              <span class="mb-1 block">{{ t('scan.toLabel') }}</span>
+              <input
+                v-model="scanTo"
+                type="date"
+                :disabled="scanning"
+                class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none disabled:opacity-50"
+              />
+            </label>
+          </div>
+          <p class="mt-2 text-xs text-slate-500">{{ t('scan.rangeHint') }}</p>
 
           <p
             v-if="scanSummary"
