@@ -45,15 +45,21 @@ const clickByText = (t) =>
 
 console.log('CLICK Ping ->', await clickByText('Ping main process'))
 await sleep(500)
-const pingText = await page.evaluate(() => document.body.innerText.match(/main replied:\s*\S+/)?.[0] ?? '(no ping text)')
+const pingText = await page.evaluate(
+  () => document.body.innerText.match(/main replied:\s*\S+/)?.[0] ?? '(no ping text)'
+)
 console.log('PING_RESULT:', pingText)
 
 // --- RONY-3 via RONY-4: click "Add sample invoice" -> IPC -> SQLite insert ---
-const countBefore = await page.evaluate(() => document.body.innerText.match(/Rows in local DB:\s*(\d+)/)?.[1] ?? '?')
+const countBefore = await page.evaluate(
+  () => document.body.innerText.match(/Rows in local DB:\s*(\d+)/)?.[1] ?? '?'
+)
 console.log('ROWS_BEFORE:', countBefore)
 console.log('CLICK Add sample ->', await clickByText('Add sample invoice'))
 await sleep(800)
-const countAfter = await page.evaluate(() => document.body.innerText.match(/Rows in local DB:\s*(\d+)/)?.[1] ?? '?')
+const countAfter = await page.evaluate(
+  () => document.body.innerText.match(/Rows in local DB:\s*(\d+)/)?.[1] ?? '?'
+)
 console.log('ROWS_AFTER:', countAfter)
 const rowCountInTable = await page.evaluate(() => document.querySelectorAll('tbody tr').length)
 console.log('TABLE_ROWS:', rowCountInTable)
