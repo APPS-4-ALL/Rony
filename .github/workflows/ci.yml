@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+
+      # Skip the postinstall (Electron download + native better-sqlite3 rebuild):
+      # typecheck / lint / test don't run the native module, so this is faster
+      # and avoids flaky native builds on CI.
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint (no warnings allowed)
+        run: npx eslint . --max-warnings 0
+
+      - name: Test
+        run: npm test
