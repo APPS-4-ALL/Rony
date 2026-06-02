@@ -1,18 +1,31 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import type { AuthStatus, EngineType, Settings } from '@shared/types'
-import { connectionDisplay, ENGINE_OPTIONS } from '../lib/settingsView'
+import type { AiProvider, AuthStatus, EngineType, Settings } from '@shared/types'
+import { connectionDisplay, ENGINE_OPTIONS, PROVIDER_OPTIONS } from '../lib/settingsView'
 
 const status = ref<AuthStatus>({ connected: false, email: null })
-const settings = ref<Settings>({ defaultEngine: 'deterministic' })
+const settings = ref<Settings>({ defaultEngine: 'deterministic', aiProvider: 'openai' })
 const busy = ref(false)
 const error = ref('')
 
+// --- RONY-16: API key state ---
+const apiKeyInput = ref('')
+const apiKeySet = ref(false)
+
 const conn = computed(() => connectionDisplay(status.value))
+const showAi = computed(() => settings.value.defaultEngine === 'ai')
+const providerLabel = computed(
+  () => PROVIDER_OPTIONS.find((p) => p.value === settings.value.aiProvider)?.label ?? ''
+)
+
+async function refreshKeyStatus(): Promise<void> {
+  apiKeySet.value = await window.api.settings.hasApiKey(settings.value.aiProvider)
+}
 
 async function load(): Promise<void> {
   status.value = await window.api.auth.status()
   settings.value = await window.api.settings.get()
+  await refreshKeyStatus()
 }
 
 async function guarded(fn: () => Promise<void>): Promise<void> {
@@ -40,6 +53,29 @@ const onLogout = (): Promise<void> =>
 const selectEngine = (engine: EngineType): Promise<void> =>
   guarded(async () => {
     settings.value = await window.api.settings.set({ defaultEngine: engine })
+    await refreshKeyStatus()
+  })
+
+const selectProvider = (provider: AiProvider): Promise<void> =>
+  guarded(async () => {
+    settings.value = await window.api.settings.set({ aiProvider: provider })
+    apiKeyInput.value = ''
+    await refreshKeyStatus()
+  })
+
+const saveApiKey = (): Promise<void> =>
+  guarded(async () => {
+    const key = apiKeyInput.value.trim()
+    if (!key) return
+    await window.api.settings.setApiKey(settings.value.aiProvider, key)
+    apiKeyInput.value = ''
+    await refreshKeyStatus()
+  })
+
+const clearKey = (): Promise<void> =>
+  guarded(async () => {
+    await window.api.settings.clearApiKey(settings.value.aiProvider)
+    await refreshKeyStatus()
   })
 
 onMounted(() => guarded(load))
@@ -116,6 +152,68 @@ onMounted(() => guarded(load))
           <p class="mt-1 text-sm text-slate-400">{{ opt.description }}</p>
         </button>
       </div>
+    </section>
+
+    <!-- AI provider + API key (RONY-16) — only when the AI engine is selected -->
+    <section v-if="showAi" class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
+      <h2 class="text-lg font-semibold">AI provider &amp; API key</h2>
+      <p class="mt-1 text-sm text-slate-400">
+        The AI engine sends email text to your chosen provider. Your key is stored
+        <span class="text-slate-200">encrypted on this computer</span> and never leaves it except to
+        call the provider.
+      </p>
+
+      <!-- Provider -->
+      <div class="mt-4 flex gap-2">
+        <button
+          v-for="p in PROVIDER_OPTIONS"
+          :key="p.value"
+          class="rounded-lg border px-3 py-1.5 text-sm font-medium transition disabled:opacity-50"
+          :class="
+            settings.aiProvider === p.value
+              ? 'border-emerald-500 bg-emerald-500/10 text-emerald-200'
+              : 'border-slate-700 text-slate-300 hover:border-slate-500'
+          "
+          :disabled="busy"
+          @click="selectProvider(p.value)"
+        >
+          {{ p.label }}
+        </button>
+      </div>
+
+      <!-- Key -->
+      <label class="mt-4 block text-sm text-slate-400">{{ providerLabel }} API key</label>
+      <div class="mt-1 flex flex-wrap items-center gap-2">
+        <input
+          v-model="apiKeyInput"
+          type="password"
+          autocomplete="off"
+          :placeholder="apiKeySet ? '•••••••• (a key is saved)' : 'Paste your API key'"
+          class="w-72 rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:outline-none"
+        />
+        <button
+          class="rounded-lg bg-emerald-500 px-4 py-1.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-50"
+          :disabled="busy || !apiKeyInput.trim()"
+          @click="saveApiKey"
+        >
+          Save
+        </button>
+        <button
+          v-if="apiKeySet"
+          class="rounded-lg border border-slate-700 px-3 py-1.5 text-sm font-medium text-slate-200 transition hover:border-red-500 hover:text-red-300 disabled:opacity-50"
+          :disabled="busy"
+          @click="clearKey"
+        >
+          Clear
+        </button>
+      </div>
+      <p class="mt-2 text-sm" :class="apiKeySet ? 'text-emerald-400' : 'text-slate-500'">
+        {{
+          apiKeySet
+            ? `✓ A key is securely stored for ${providerLabel}.`
+            : 'No key stored yet — the AI engine needs one to run.'
+        }}
+      </p>
     </section>
 
     <p v-if="error" class="rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">

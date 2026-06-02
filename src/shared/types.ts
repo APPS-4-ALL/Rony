@@ -45,10 +45,15 @@ export interface AuthStatus {
   email: string | null
 }
 
-/** User-configurable settings (RONY-12). */
+/** Supported external LLM providers for the AI engine (RONY-10/16). */
+export type AiProvider = 'openai' | 'gemini'
+
+/** User-configurable settings (RONY-12, RONY-16). */
 export interface Settings {
   /** Which engine runs by default when the user hits "Scan now". */
   defaultEngine: EngineType
+  /** Which AI provider the AI engine uses when `defaultEngine` is 'ai' (RONY-16). */
+  aiProvider: AiProvider
 }
 
 /** Summary returned when a scan finishes (RONY-14 shows this on completion). */
@@ -103,10 +108,19 @@ export interface RoniApi {
     /** Sign out and clear stored tokens; resolves with the resulting status. */
     logout: () => Promise<AuthStatus>
   }
-  /** Persisted user settings (RONY-12). */
+  /** Persisted user settings (RONY-12) + AI API-key management (RONY-16). */
   settings: {
     get: () => Promise<Settings>
     set: (patch: Partial<Settings>) => Promise<Settings>
+    /**
+     * Securely store the user's API key for a provider (encrypted at rest via
+     * Electron safeStorage). The key is write-only from the renderer.
+     */
+    setApiKey: (provider: AiProvider, key: string) => Promise<void>
+    /** Whether a key is stored for the provider. The key itself is never returned. */
+    hasApiKey: (provider: AiProvider) => Promise<boolean>
+    /** Remove the stored key for a provider. */
+    clearApiKey: (provider: AiProvider) => Promise<void>
   }
   /** Gmail sync + scan pipeline (RONY-7/9/10/11, triggered by RONY-14). */
   scan: {

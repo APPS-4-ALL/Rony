@@ -10,11 +10,11 @@
  * ⚠️ Runs in the Electron MAIN process only (needs network + API keys). Kept
  * free of Electron imports so it stays unit-testable and script-runnable.
  */
-import { getProviderConfig, resolveProvider } from './config'
+import { getModel, getProviderConfig, resolveProvider } from './config'
 import { AI_SYSTEM_PROMPT, buildUserPrompt } from './prompt'
 import { completeOpenAI } from './providers/openai'
 import { completeGemini } from './providers/gemini'
-import type { AiInput, AiProviderName, AiResult, ProviderComplete } from './types'
+import type { AiInput, AiProviderName, AiResult, ProviderComplete, ProviderConfig } from './types'
 
 const PROVIDERS: Record<AiProviderName, ProviderComplete> = {
   openai: completeOpenAI,
@@ -24,6 +24,12 @@ const PROVIDERS: Record<AiProviderName, ProviderComplete> = {
 export interface ClassifyOptions {
   /** Override the provider for this call (else AI_PROVIDER env / default). */
   provider?: AiProviderName
+  /**
+   * Explicit API key (e.g. the user's key from secure storage — RONY-16).
+   * When given, it overrides the env-based key; the model still comes from the
+   * env override or the provider default.
+   */
+  apiKey?: string
 }
 
 /**
@@ -35,7 +41,9 @@ export async function classifyWithAI(
   options: ClassifyOptions = {}
 ): Promise<AiResult> {
   const provider = resolveProvider(options.provider)
-  const cfg = getProviderConfig(provider)
+  const cfg: ProviderConfig = options.apiKey
+    ? { apiKey: options.apiKey, model: getModel(provider) }
+    : getProviderConfig(provider)
   const complete = PROVIDERS[provider]
 
   const raw = await complete({

@@ -1,7 +1,7 @@
 import { writeFile } from 'node:fs/promises'
 import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { IpcChannels } from '../../shared/ipc'
-import type { SaveFileRequest, ScanResult, Settings } from '../../shared/types'
+import type { AiProvider, SaveFileRequest, ScanResult, Settings } from '../../shared/types'
 import { countInvoices, getInvoiceById, insertInvoice, listInvoices } from '../db'
 import { getAuthStatus, login, logout } from '../auth'
 import { fetchEmails } from '../gmail'
@@ -11,8 +11,10 @@ import { downloadAndRecord, getInvoicesDir } from '../download'
 import { isPathInsideDir } from '../lib/pathSafety'
 import { selectApproved } from '../scan/classify'
 import { classifyWithAI } from '../engines/ai'
-import { getProviderConfig, resolveProvider } from '../engines/ai/config'
+import { getProviderConfig } from '../engines/ai/config'
 import { getSettings, updateSettings } from '../settings'
+import { clearApiKey, getApiKey, hasApiKey, setApiKey } from '../settings/apiKeyStore'
+import { isAiProvider } from '../settings/validate'
 
 /**
  * Registers all main-process IPC handlers. Uses `ipcMain.handle` so each call
@@ -77,30 +79,47 @@ export function registerIpcHandlers(): void {
     (_e, patch: Partial<Settings>): Settings => updateSettings(patch)
   )
 
+  // --- API keys (REAL — RONY-16, encrypted via safeStorage; renderer is write-only) ---
+  ipcMain.handle(IpcChannels.settingsSetApiKey, (_e, provider: AiProvider, key: string): void => {
+    if (!isAiProvider(provider)) throw new Error('Invalid AI provider.')
+    if (typeof key !== 'string') throw new Error('Invalid API key.')
+    setApiKey(provider, key)
+  })
+  ipcMain.handle(IpcChannels.settingsHasApiKey, (_e, provider: AiProvider): boolean =>
+    isAiProvider(provider) ? hasApiKey(provider) : false
+  )
+  ipcMain.handle(IpcChannels.settingsClearApiKey, (_e, provider: AiProvider): void => {
+    if (isAiProvider(provider)) clearApiKey(provider)
+  })
+
   // --- Scan pipeline (RONY-7 fetch → RONY-9/RONY-10 classify → RONY-11 download) ---
   // Fetch recent Gmail messages (RONY-7), classify each with the engine the user
   // selected in settings (RONY-9 deterministic OR RONY-10 AI), then download the
   // matched emails' PDF/image attachments and record them in SQLite (RONY-11).
   // Triggered by the RONY-14 "Scan now" button.
   ipcMain.handle(IpcChannels.scanRun, async (): Promise<ScanResult> => {
-    // Use the user's persisted engine choice (RONY-12).
-    const engine = getSettings().defaultEngine
+    // Use the user's persisted engine + provider choice (RONY-12/16).
+    const { defaultEngine: engine, aiProvider } = getSettings()
 
-    // Fail fast (before fetching) with a readable message if the AI engine is
-    // selected but no API key is configured — beats 50 per-email failures.
-    if (engine === 'ai') getProviderConfig(resolveProvider())
+    // Prefer the user's stored key (RONY-16); undefined → the engine falls back
+    // to a .env key (dev). Fail fast before fetching if neither is available.
+    const aiApiKey = engine === 'ai' ? getApiKey(aiProvider) : undefined
+    if (engine === 'ai' && !aiApiKey) getProviderConfig(aiProvider)
 
     const { emails, errors: fetchErrors } = await fetchEmails()
 
     const { approved, errors: classifyErrors } = await selectApproved(emails, engine, {
       deterministic: (email) => classifyDeterministic(toDeterministicInput(email)).isInvoice,
       ai: (email) =>
-        classifyWithAI({
-          subject: email.subject,
-          body: email.bodyText,
-          from: email.from,
-          filenames: email.attachments.map((a) => a.filename)
-        })
+        classifyWithAI(
+          {
+            subject: email.subject,
+            body: email.bodyText,
+            from: email.from,
+            filenames: email.attachments.map((a) => a.filename)
+          },
+          { provider: aiProvider, apiKey: aiApiKey }
+        )
     })
 
     const download = await downloadAndRecord(approved)
