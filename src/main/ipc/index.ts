@@ -1,5 +1,5 @@
 import { writeFile } from 'node:fs/promises'
-import { BrowserWindow, dialog, ipcMain } from 'electron'
+import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { IpcChannels } from '../../shared/ipc'
 import type { SaveFileRequest, ScanResult, Settings } from '../../shared/types'
 import { countInvoices, insertInvoice, listInvoices } from '../db'
@@ -45,6 +45,12 @@ export function registerIpcHandlers(): void {
       engineType: 'deterministic'
     })
   )
+  // Open a downloaded invoice with the OS default app (RONY-13 "Open file").
+  // shell.openPath returns '' on success or an error string on failure.
+  ipcMain.handle(IpcChannels.invoicesOpenFile, (_e, path: string) => {
+    if (!path) return Promise.resolve('No file is associated with this invoice yet.')
+    return shell.openPath(path)
+  })
 
   // --- Auth (REAL — RONY-6) ---
   ipcMain.handle(IpcChannels.authStatus, () => getAuthStatus())

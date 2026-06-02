@@ -8,6 +8,7 @@ export const IpcChannels = {
   invoicesList: 'invoices:list',
   invoicesCount: 'invoices:count',
   invoicesAddSample: 'invoices:addSample',
+  invoicesOpenFile: 'invoices:openFile',
   // --- Step-0 contract additions ---
   authStatus: 'auth:status',
   authLogin: 'auth:login',

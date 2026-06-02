@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import type { Invoice } from '@shared/types'
+import InvoicesTable from './components/InvoicesTable.vue'
 
 const pingResult = ref<string>('')
 const invoices = ref<Invoice[]>([])
@@ -94,6 +95,13 @@ onMounted(() => withGuard(refresh))
           >
             Add sample invoice
           </button>
+          <button
+            class="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-emerald-500 hover:text-emerald-300 disabled:opacity-50"
+            :disabled="busy"
+            @click="() => withGuard(refresh)"
+          >
+            Refresh
+          </button>
           <span class="text-sm text-slate-400">
             Rows in local DB: <span class="font-semibold text-slate-100">{{ count }}</span>
           </span>
@@ -104,37 +112,10 @@ onMounted(() => withGuard(refresh))
         </p>
       </section>
 
-      <!-- Invoices table -->
-      <section class="mt-6 rounded-xl border border-slate-800 bg-slate-900/60 p-6">
-        <h2 class="text-lg font-semibold">Stored invoices</h2>
-        <div v-if="invoices.length === 0" class="mt-3 text-sm text-slate-500">
-          No invoices yet — add a sample above.
-        </div>
-        <table v-else class="mt-3 w-full text-left text-sm">
-          <thead class="text-xs uppercase tracking-wide text-slate-500">
-            <tr>
-              <th class="py-2 pr-4">#</th>
-              <th class="py-2 pr-4">Vendor</th>
-              <th class="py-2 pr-4">Date</th>
-              <th class="py-2 pr-4">Amount</th>
-              <th class="py-2 pr-4">Engine</th>
-              <th class="py-2">Status</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-800">
-            <tr v-for="inv in invoices" :key="inv.id">
-              <td class="py-2 pr-4 font-mono text-slate-500">{{ inv.id }}</td>
-              <td class="py-2 pr-4">{{ inv.vendor ?? '—' }}</td>
-              <td class="py-2 pr-4 text-slate-400">{{ inv.date ?? '—' }}</td>
-              <td class="py-2 pr-4">
-                {{ inv.amount != null ? `${inv.amount} ${inv.currency ?? ''}`.trim() : '—' }}
-              </td>
-              <td class="py-2 pr-4 text-slate-400">{{ inv.engineType }}</td>
-              <td class="py-2 text-slate-400">{{ inv.status }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
+      <!-- Invoices dashboard table (RONY-13) — renders directly from SQLite -->
+      <div class="mt-6">
+        <InvoicesTable :invoices="invoices" />
+      </div>
     </div>
   </div>
 </template>

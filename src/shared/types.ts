@@ -85,6 +85,12 @@ export interface RoniApi {
     count: () => Promise<number>
     /** Insert a row and return it — used to demonstrate the DB write/read round-trip. */
     addSample: () => Promise<Invoice>
+    /**
+     * Open a downloaded invoice file with the OS default app (RONY-13 "Open
+     * file" button). Resolves with an empty string on success, or an OS error
+     * message if the path is missing/unopenable.
+     */
+    openFile: (path: string) => Promise<string>
   }
   /** Google OAuth / Gmail connection (RONY-6, RONY-12). */
   auth: {
