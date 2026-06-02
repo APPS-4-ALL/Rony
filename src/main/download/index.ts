@@ -9,7 +9,7 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import { getAuthorizedClient } from '../auth'
 import { fetchAttachmentData, NotConnectedError } from '../gmail'
-import { insertInvoice, invoiceExistsByPath } from '../db'
+import { invoiceExistsByPath, tryInsertInvoice } from '../db'
 import { downloadApproved, type ApprovedEmail, type DownloadSummary } from './core'
 
 /**
@@ -34,7 +34,7 @@ export async function downloadAndRecord(approved: ApprovedEmail[]): Promise<Down
     targetDir: getInvoicesDir(),
     fetchAttachment: (messageId, attachmentId) =>
       fetchAttachmentData(client, messageId, attachmentId),
-    store: { existsByPath: invoiceExistsByPath, insert: insertInvoice }
+    store: { existsByPath: invoiceExistsByPath, insert: tryInsertInvoice }
   })
 }
 

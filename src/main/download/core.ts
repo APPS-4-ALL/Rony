@@ -6,7 +6,7 @@
  * store. Pure + dependency-injected — NO Electron / network / SQLite imports —
  * so it is fully unit-testable. The real wiring lives in ./index.ts.
  */
-import { mkdir, writeFile } from 'node:fs/promises'
+import { access, mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isPdfOrImage, type GmailAttachmentRef, type ParsedEmail } from '../gmail/parse'
 import type { EngineType, NewInvoice } from '../../shared/types'
@@ -31,7 +31,8 @@ export interface ApprovedEmail {
 /** Minimal persistence surface — the real impl wraps SQLite; tests inject a fake. */
 export interface InvoiceStore {
   existsByPath(localFilePath: string): boolean
-  insert(invoice: NewInvoice): void
+  /** Insert a row; return true if inserted, false if a row for this path already exists. */
+  insert(invoice: NewInvoice): boolean
 }
 
 export interface DownloadDeps {
@@ -43,9 +44,9 @@ export interface DownloadDeps {
 }
 
 export interface DownloadSummary {
-  /** Files saved + rows inserted this run. */
+  /** Files written + rows recorded (or files restored) this run. */
   downloaded: number
-  /** Skipped: already recorded (dedup), or out of scope (no id / too small / wrong type). */
+  /** Skipped: already present (file on disk + row), or out of scope, or lost a race. */
   skipped: number
   /** Per-attachment failures (non-fatal — the run continues). */
   errors: number
@@ -56,6 +57,9 @@ export interface DownloadSummary {
  * than real invoice scans, so we skip them. PDFs download regardless of size.
  */
 const MIN_IMAGE_BYTES = 8 * 1024
+
+/** How many attachments to download at once (matches RONY-7's fetch concurrency). */
+const DOWNLOAD_CONCURRENCY = 5
 
 /** Make a Gmail filename safe to use as a local file name. */
 export function sanitizeFilename(name: string): string {
@@ -74,10 +78,51 @@ function isInScope(att: GmailAttachmentRef): boolean {
   return true
 }
 
+/** Async file-existence check (non-blocking). */
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await access(path)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** One unit of download work, resolved up front. */
+interface DownloadTask {
+  messageId: string
+  attachmentId: string
+  filename: string
+  targetPath: string
+  invoice: NewInvoice
+}
+
+/** Run `fn` over `items` with at most `limit` in flight at once. */
+async function runWithConcurrency<T>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<void>
+): Promise<void> {
+  let next = 0
+  const worker = async (): Promise<void> => {
+    while (next < items.length) {
+      const i = next++
+      await fn(items[i])
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+}
+
 /**
  * Download every approved email's in-scope attachments and record each in the
- * store. Idempotent: an attachment already recorded (same target path) is
- * skipped, so re-running a scan doesn't duplicate files or rows.
+ * store. Robust to:
+ *  - same-name attachments in one email — the file name includes the
+ *    attachment's index, so neither is silently overwritten/dropped (#1);
+ *  - concurrent scans — the store's insert is conflict-safe and counts a lost
+ *    race as skipped (#2);
+ *  - a file the user deleted from disk — the bytes are re-fetched and rewritten
+ *    even though the DB row still exists (#3);
+ * and downloads run with bounded concurrency for speed (#4).
  */
 export async function downloadApproved(
   approved: ApprovedEmail[],
@@ -86,27 +131,24 @@ export async function downloadApproved(
   const summary: DownloadSummary = { downloaded: 0, skipped: 0, errors: 0 }
   await mkdir(deps.targetDir, { recursive: true })
 
+  // Resolve the work list up front; the index makes each file name unique.
+  const tasks: DownloadTask[] = []
   for (const { email, engineType, extracted } of approved) {
-    for (const att of email.attachments) {
-      const { attachmentId } = att
-      // Skip inline data (no fetchable id) and out-of-scope/tiny attachments.
-      if (!attachmentId || !isInScope(att)) {
+    email.attachments.forEach((att, index) => {
+      if (!att.attachmentId || !isInScope(att)) {
         summary.skipped++
-        continue
+        return
       }
-
-      const targetPath = join(deps.targetDir, `${email.id}__${sanitizeFilename(att.filename)}`)
-
-      // Dedup: don't re-download something already recorded.
-      if (deps.store.existsByPath(targetPath)) {
-        summary.skipped++
-        continue
-      }
-
-      try {
-        const bytes = await deps.fetchAttachment(email.id, attachmentId)
-        await writeFile(targetPath, bytes)
-        deps.store.insert({
+      const targetPath = join(
+        deps.targetDir,
+        `${email.id}__${index}__${sanitizeFilename(att.filename)}`
+      )
+      tasks.push({
+        messageId: email.id,
+        attachmentId: att.attachmentId,
+        filename: att.filename,
+        targetPath,
+        invoice: {
           messageId: email.id,
           date: extracted?.date ?? email.date,
           vendor: extracted?.vendor ?? null,
@@ -115,14 +157,36 @@ export async function downloadApproved(
           localFilePath: targetPath,
           status: 'downloaded',
           engineType
-        })
-        summary.downloaded++
-      } catch (e) {
-        summary.errors++
-        console.error(`[download] failed for ${email.id} / ${att.filename}:`, e)
-      }
-    }
+        }
+      })
+    })
   }
+
+  await runWithConcurrency(tasks, DOWNLOAD_CONCURRENCY, async (task) => {
+    try {
+      const recorded = deps.store.existsByPath(task.targetPath)
+      // Already recorded AND the file is still on disk → nothing to do.
+      if (recorded && (await fileExists(task.targetPath))) {
+        summary.skipped++
+        return
+      }
+
+      const bytes = await deps.fetchAttachment(task.messageId, task.attachmentId)
+      await writeFile(task.targetPath, bytes)
+
+      if (recorded) {
+        // Row exists but the file was missing — we just restored it; no new row.
+        summary.downloaded++
+        return
+      }
+      // New file: record it. A false return means a concurrent scan won the race.
+      if (deps.store.insert(task.invoice)) summary.downloaded++
+      else summary.skipped++
+    } catch (e) {
+      summary.errors++
+      console.error(`[download] failed for ${task.messageId} / ${task.filename}:`, e)
+    }
+  })
 
   return summary
 }

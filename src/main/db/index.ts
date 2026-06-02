@@ -61,6 +61,11 @@ export function initDatabase(): Database.Database {
       created_at      TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_invoices_message_id ON invoices (message_id);
+    -- One row per downloaded file. NULLs are allowed many times (SQLite treats
+    -- them as distinct), so non-file rows (samples) are unaffected; this lets
+    -- the DB itself block duplicate downloads even under concurrent scans.
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_local_file_path
+      ON invoices (local_file_path);
   `)
 
   console.log(`[db] SQLite ready at ${dbPath}`)
@@ -104,6 +109,22 @@ export function invoiceExistsByPath(localFilePath: string): boolean {
     .prepare('SELECT 1 FROM invoices WHERE local_file_path = ? LIMIT 1')
     .get(localFilePath)
   return row !== undefined
+}
+
+/**
+ * Insert an invoice, but do nothing if a row with the same `local_file_path`
+ * already exists (RONY-11). Returns true if a new row was inserted, false if it
+ * was a duplicate — so concurrent scans can't double-insert the same file.
+ */
+export function tryInsertInvoice(invoice: NewInvoice): boolean {
+  const info = getDb()
+    .prepare(
+      `INSERT INTO invoices (message_id, date, vendor, amount, currency, local_file_path, status, engine_type)
+       VALUES (@messageId, @date, @vendor, @amount, @currency, @localFilePath, @status, @engineType)
+       ON CONFLICT(local_file_path) DO NOTHING`
+    )
+    .run(invoice)
+  return info.changes > 0
 }
 
 /**
