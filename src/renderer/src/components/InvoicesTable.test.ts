@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import InvoicesTable from './InvoicesTable.vue'
 import type { Invoice } from '@shared/types'
 
@@ -22,12 +22,15 @@ function inv(over: Partial<Invoice>): Invoice {
 }
 
 const openFile = vi.fn<(id: number) => Promise<string>>()
+const saveFile = vi.fn<(req: { defaultName: string; content: string }) => Promise<string | null>>()
 
 beforeEach(() => {
   openFile.mockReset()
   openFile.mockResolvedValue('')
-  // The component calls window.api.invoices.openFile — stub just that surface.
-  vi.stubGlobal('api', { invoices: { openFile } })
+  saveFile.mockReset()
+  saveFile.mockResolvedValue('C:/Docs/invoices-2026-06-02.csv')
+  // The component calls window.api.invoices.openFile + window.api.dialog.saveFile.
+  vi.stubGlobal('api', { invoices: { openFile }, dialog: { saveFile } })
 })
 
 afterEach(() => {
@@ -114,5 +117,33 @@ describe('InvoicesTable.vue', () => {
     await wrapper.find('input[type="search"]').setValue('zzzz')
     expect(wrapper.findAll('tbody tr')).toHaveLength(0)
     expect(wrapper.text()).toContain('No invoices match')
+  })
+
+  it('exports the filtered rows to CSV via the save dialog (RONY-15)', async () => {
+    const wrapper = mount(InvoicesTable, {
+      props: {
+        invoices: [inv({ id: 1, vendor: 'Electric Co' }), inv({ id: 2, vendor: 'Water Ltd' })]
+      }
+    })
+    // Narrow to one row, then export — only the shown row should be in the CSV.
+    await wrapper.find('input[type="search"]').setValue('electric')
+
+    const exportBtn = wrapper.findAll('button').find((b) => b.text().includes('Export'))!
+    await exportBtn.trigger('click')
+    await flushPromises()
+
+    expect(saveFile).toHaveBeenCalledTimes(1)
+    const { defaultName, content } = saveFile.mock.calls[0][0]
+    expect(defaultName).toMatch(/^invoices-\d{4}-\d{2}-\d{2}\.csv$/)
+    expect(content).toContain('Date,Vendor,Amount,Currency,Found by,Status,File')
+    expect(content).toContain('Electric Co')
+    expect(content).not.toContain('Water Ltd') // filtered out
+    expect(wrapper.text()).toContain('Exported 1 row')
+  })
+
+  it('disables Export when there are no rows', () => {
+    const wrapper = mount(InvoicesTable, { props: { invoices: [] } })
+    const exportBtn = wrapper.findAll('button').find((b) => b.text().includes('Export'))!
+    expect((exportBtn.element as HTMLButtonElement).disabled).toBe(true)
   })
 })

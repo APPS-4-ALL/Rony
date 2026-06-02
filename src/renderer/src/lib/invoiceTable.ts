@@ -79,3 +79,41 @@ export function filterInvoices(invoices: Invoice[], query: string): Invoice[] {
     return haystack.includes(q)
   })
 }
+
+/* ------------------------------------------------------------------ *
+ * CSV export (RONY-15).
+ *
+ * Columns mirror the table, but values are machine-friendly: the raw ISO date
+ * and a plain numeric amount (no thousands separators), so spreadsheets parse
+ * them correctly. Escaping follows RFC 4180.
+ * ------------------------------------------------------------------ */
+
+const CSV_COLUMNS: ReadonlyArray<{
+  header: string
+  value: (inv: Invoice) => string | number | null
+}> = [
+  { header: 'Date', value: (i) => i.date },
+  { header: 'Vendor', value: (i) => i.vendor },
+  { header: 'Amount', value: (i) => i.amount },
+  { header: 'Currency', value: (i) => i.currency },
+  { header: 'Found by', value: (i) => engineLabel(i.engineType) },
+  { header: 'Status', value: (i) => i.status },
+  { header: 'File', value: (i) => i.localFilePath }
+]
+
+/** Escape a single CSV cell per RFC 4180 (quote when it holds ", comma or newline). */
+function csvCell(value: string | number | null): string {
+  if (value === null || value === undefined) return ''
+  const s = String(value)
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
+
+/**
+ * Serialise invoices to CSV text (header + one row each), CRLF line endings.
+ * Pass the already-filtered/sorted rows to export exactly what the user sees.
+ */
+export function invoicesToCsv(invoices: Invoice[]): string {
+  const header = CSV_COLUMNS.map((c) => c.header).join(',')
+  const rows = invoices.map((inv) => CSV_COLUMNS.map((c) => csvCell(c.value(inv))).join(','))
+  return [header, ...rows].join('\r\n')
+}

@@ -6,6 +6,7 @@ import {
   filterInvoices,
   formatAmount,
   formatDate,
+  invoicesToCsv,
   sortInvoices,
   type SortDir,
   type SortKey
@@ -55,18 +56,55 @@ async function openFile(inv: Invoice): Promise<void> {
   const err = await window.api.invoices.openFile(inv.id)
   if (err) openError.value = err
 }
+
+const exporting = ref(false)
+const exportNote = ref('')
+
+/**
+ * Export the currently displayed rows (filtered + sorted) to a CSV via the OS
+ * save dialog (RONY-15). A UTF-8 BOM is prepended so Excel renders Hebrew
+ * vendor names correctly.
+ */
+async function exportCsv(): Promise<void> {
+  if (exporting.value || rows.value.length === 0) return
+  exporting.value = true
+  exportNote.value = ''
+  try {
+    const BOM = '﻿' // helps Excel detect UTF-8 (Hebrew vendor names)
+    const csv = BOM + invoicesToCsv(rows.value)
+    const defaultName = `invoices-${new Date().toISOString().slice(0, 10)}.csv`
+    const savedPath = await window.api.dialog.saveFile({ defaultName, content: csv })
+    exportNote.value = savedPath
+      ? `Exported ${rows.value.length} row${rows.value.length === 1 ? '' : 's'} to ${savedPath}`
+      : '' // user cancelled the dialog — say nothing
+  } catch (e) {
+    exportNote.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    exporting.value = false
+  }
+}
 </script>
 
 <template>
   <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h2 class="text-lg font-semibold">Invoices</h2>
-      <input
-        v-model="search"
-        type="search"
-        placeholder="Filter by vendor, date, amount…"
-        class="w-64 rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:outline-none"
-      />
+      <div class="flex items-center gap-2">
+        <input
+          v-model="search"
+          type="search"
+          placeholder="Filter by vendor, date, amount…"
+          class="w-64 rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:outline-none"
+        />
+        <button
+          class="rounded-lg border border-slate-700 px-3 py-1.5 text-sm font-semibold text-slate-200 transition hover:border-emerald-500 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+          :disabled="exporting || rows.length === 0"
+          :title="rows.length === 0 ? 'Nothing to export' : 'Export the shown rows to CSV'"
+          @click="exportCsv"
+        >
+          {{ exporting ? 'Exporting…' : 'Export CSV' }}
+        </button>
+      </div>
     </div>
 
     <p class="mt-1 text-sm text-slate-400">
@@ -131,6 +169,9 @@ async function openFile(inv: Invoice): Promise<void> {
 
     <p v-if="openError" class="mt-4 rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">
       Couldn’t open file: {{ openError }}
+    </p>
+    <p v-if="exportNote" class="mt-4 rounded-lg bg-slate-800/60 px-3 py-2 text-sm text-slate-300">
+      {{ exportNote }}
     </p>
   </section>
 </template>
