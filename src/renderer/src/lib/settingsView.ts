@@ -4,7 +4,18 @@
  * Display data and small mappings for the Settings page, kept out of the Vue
  * component so they can be unit-tested without a DOM.
  */
-import type { AuthStatus, EngineType } from '@shared/types'
+import type { AiProvider, AuthStatus, EngineType } from '@shared/types'
+
+export interface ProviderOption {
+  value: AiProvider
+  label: string
+}
+
+/** The selectable AI providers, in display order (RONY-16). */
+export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
+  { value: 'openai', label: 'OpenAI' },
+  { value: 'gemini', label: 'Gemini' }
+]
 
 export interface EngineOption {
   value: EngineType

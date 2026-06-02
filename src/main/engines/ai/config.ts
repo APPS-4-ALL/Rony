@@ -28,15 +28,22 @@ export function resolveProvider(explicit?: AiProviderName): AiProviderName {
   throw new Error(`Unsupported AI_PROVIDER "${raw}" — use "openai" or "gemini".`)
 }
 
-/** Resolve the API key + model for a provider, or throw a helpful error. */
+/** Resolve the model for a provider (env override or default). */
+export function getModel(provider: AiProviderName): string {
+  const modelEnv = provider === 'openai' ? 'OPENAI_MODEL' : 'GEMINI_MODEL'
+  return process.env[modelEnv]?.trim() || DEFAULT_MODELS[provider]
+}
+
+/**
+ * Resolve the API key + model for a provider FROM THE ENVIRONMENT, or throw a
+ * helpful error. Used as the dev fallback when no key was passed explicitly
+ * (the app normally passes the user's stored key — RONY-16).
+ */
 export function getProviderConfig(provider: AiProviderName): ProviderConfig {
   const keyEnv = provider === 'openai' ? 'OPENAI_API_KEY' : 'GEMINI_API_KEY'
-  const modelEnv = provider === 'openai' ? 'OPENAI_MODEL' : 'GEMINI_MODEL'
-
   const apiKey = process.env[keyEnv]?.trim()
   if (!apiKey) {
-    throw new Error(`${keyEnv} is not set — configure it in your .env (see .env.example).`)
+    throw new Error(`${keyEnv} is not set — add your API key in Settings (or a .env for dev).`)
   }
-  const model = process.env[modelEnv]?.trim() || DEFAULT_MODELS[provider]
-  return { apiKey, model }
+  return { apiKey, model: getModel(provider) }
 }

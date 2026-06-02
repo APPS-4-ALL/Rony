@@ -21,7 +21,10 @@ const api: RoniApi = {
   },
   settings: {
     get: () => ipcRenderer.invoke(IpcChannels.settingsGet),
-    set: (patch) => ipcRenderer.invoke(IpcChannels.settingsSet, patch)
+    set: (patch) => ipcRenderer.invoke(IpcChannels.settingsSet, patch),
+    setApiKey: (provider, key) => ipcRenderer.invoke(IpcChannels.settingsSetApiKey, provider, key),
+    hasApiKey: (provider) => ipcRenderer.invoke(IpcChannels.settingsHasApiKey, provider),
+    clearApiKey: (provider) => ipcRenderer.invoke(IpcChannels.settingsClearApiKey, provider)
   },
   scan: {
     run: () => ipcRenderer.invoke(IpcChannels.scanRun)

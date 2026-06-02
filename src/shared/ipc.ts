@@ -15,6 +15,9 @@ export const IpcChannels = {
   authLogout: 'auth:logout',
   settingsGet: 'settings:get',
   settingsSet: 'settings:set',
+  settingsSetApiKey: 'settings:setApiKey',
+  settingsHasApiKey: 'settings:hasApiKey',
+  settingsClearApiKey: 'settings:clearApiKey',
   scanRun: 'scan:run',
   dialogSaveFile: 'dialog:saveFile'
 } as const

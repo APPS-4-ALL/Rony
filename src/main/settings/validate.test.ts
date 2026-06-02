@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { coerceDefaultEngine, DEFAULT_SETTINGS, isEngineType } from './validate'
+import {
+  coerceAiProvider,
+  coerceDefaultEngine,
+  DEFAULT_SETTINGS,
+  isAiProvider,
+  isEngineType
+} from './validate'
 
 describe('settings validation', () => {
   it('recognises the valid engine values', () => {
@@ -19,5 +25,15 @@ describe('settings validation', () => {
     expect(coerceDefaultEngine('deterministic')).toBe('deterministic')
     expect(coerceDefaultEngine(undefined)).toBe(DEFAULT_SETTINGS.defaultEngine)
     expect(coerceDefaultEngine('garbage')).toBe('deterministic')
+  })
+
+  it('recognises + coerces the AI provider (RONY-16)', () => {
+    expect(isAiProvider('openai')).toBe(true)
+    expect(isAiProvider('gemini')).toBe(true)
+    expect(isAiProvider('claude')).toBe(false)
+    expect(isAiProvider(undefined)).toBe(false)
+    expect(coerceAiProvider('gemini')).toBe('gemini')
+    expect(coerceAiProvider('garbage')).toBe(DEFAULT_SETTINGS.aiProvider)
+    expect(coerceAiProvider(undefined)).toBe('openai')
   })
 })

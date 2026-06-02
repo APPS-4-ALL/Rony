@@ -114,6 +114,22 @@ describe('error handling', () => {
   })
 })
 
+describe('explicit apiKey override (RONY-16)', () => {
+  it('uses the passed-in key with no env key present', async () => {
+    delete process.env.OPENAI_API_KEY // no env fallback available
+    const fetchMock = mockFetch(openaiPayload)
+
+    const result = await classifyWithAI(SAMPLE, {
+      provider: 'openai',
+      apiKey: 'sk-from-secure-store'
+    })
+
+    expect(result.isFinancial).toBe(true)
+    const init = fetchMock.mock.calls[0][1] as { headers: Record<string, string> }
+    expect(init.headers.Authorization).toBe('Bearer sk-from-secure-store')
+  })
+})
+
 describe('normalizeAiResult — robust parsing', () => {
   it('strips markdown code fences', () => {
     const r = normalizeAiResult('```json\n{"isFinancial":true,"confidenceScore":0.5}\n```')
