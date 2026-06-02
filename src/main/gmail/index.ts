@@ -99,6 +99,28 @@ export async function getMessage(client: OAuth2Client, id: string): Promise<Gmai
   return data
 }
 
+interface AttachmentResponse {
+  size?: number
+  /** base64url-encoded attachment bytes. */
+  data?: string
+}
+
+/**
+ * Download one attachment's raw bytes via `users.messages.attachments.get`
+ * (RONY-11). Returns a Buffer ready to write to disk.
+ */
+export async function fetchAttachmentData(
+  client: OAuth2Client,
+  messageId: string,
+  attachmentId: string
+): Promise<Buffer> {
+  const { data } = await client.request<AttachmentResponse>({
+    url: `${GMAIL_API}/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`
+  })
+  if (!data.data) throw new Error(`Gmail attachment ${attachmentId} returned no data.`)
+  return Buffer.from(data.data, 'base64url')
+}
+
 /** Result of a fetch run: the parsed emails plus a count of per-message failures. */
 export interface FetchResult {
   emails: ParsedEmail[]

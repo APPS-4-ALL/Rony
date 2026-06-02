@@ -7,6 +7,7 @@ import { getAuthStatus, login, logout } from '../auth'
 import { fetchEmails } from '../gmail'
 import { toDeterministicInput } from '../gmail/parse'
 import { classifyDeterministic } from '../../shared/engines/deterministic'
+import { downloadAndRecord, type ApprovedEmail } from '../download'
 
 /* ------------------------------------------------------------------ *
  * Remaining Step-0 STUB state (settings + scan).
@@ -64,18 +65,28 @@ export function registerIpcHandlers(): void {
     return stubSettings
   })
 
-  // --- Scan pipeline (RONY-7 fetch + RONY-9 classify) ---
-  // Fetches recent Gmail messages (RONY-7) and runs each through the
-  // deterministic engine (RONY-9), reporting how many were inspected and how
-  // many look like invoices/receipts. Downloading the matched attachments and
-  // persisting rows is RONY-11 — that's why `downloaded` is still 0 here.
+  // --- Scan pipeline (RONY-7 fetch + RONY-9 classify + RONY-11 download) ---
+  // Fetch recent Gmail messages (RONY-7), classify each with the deterministic
+  // engine (RONY-9), then download the matched emails' PDF/image attachments to
+  // the local folder and record them in SQLite (RONY-11). Wiring the AI engine
+  // (RONY-10) into this path is a later round.
   ipcMain.handle(IpcChannels.scanRun, async (): Promise<ScanResult> => {
     const { emails, errors } = await fetchEmails()
-    let matched = 0
+
+    const approved: ApprovedEmail[] = []
     for (const email of emails) {
-      if (classifyDeterministic(toDeterministicInput(email)).isInvoice) matched++
+      if (classifyDeterministic(toDeterministicInput(email)).isInvoice) {
+        approved.push({ email, engineType: 'deterministic' })
+      }
     }
-    return { scanned: emails.length, matched, downloaded: 0, errors }
+
+    const download = await downloadAndRecord(approved)
+    return {
+      scanned: emails.length,
+      matched: approved.length,
+      downloaded: download.downloaded,
+      errors: errors + download.errors
+    }
   })
 
   // --- Native save dialog (REAL — usable today by RONY-15) ---
