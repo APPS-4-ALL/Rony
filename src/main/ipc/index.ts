@@ -12,18 +12,7 @@ import { isPathInsideDir } from '../lib/pathSafety'
 import { selectApproved } from '../scan/classify'
 import { classifyWithAI } from '../engines/ai'
 import { getProviderConfig, resolveProvider } from '../engines/ai/config'
-
-/* ------------------------------------------------------------------ *
- * Remaining Step-0 STUB state (settings + scan).
- *
- * These in-memory values let the renderer (Person B) build and visually
- * test every UI state BEFORE the real backend lands. Person A replaces each
- * stub body with the real implementation (RONY-7/9/10/11) without changing
- * the channel names or return shapes, so the frontend keeps working.
- *
- * Auth (RONY-6) is now REAL — see ../auth.
- * ------------------------------------------------------------------ */
-let stubSettings: Settings = { defaultEngine: 'deterministic' }
+import { getSettings, updateSettings } from '../settings'
 
 /**
  * Registers all main-process IPC handlers. Uses `ipcMain.handle` so each call
@@ -81,12 +70,12 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IpcChannels.authLogin, () => login())
   ipcMain.handle(IpcChannels.authLogout, () => logout())
 
-  // --- Settings (STUB → RONY-12 persistence) ---
-  ipcMain.handle(IpcChannels.settingsGet, (): Settings => stubSettings)
-  ipcMain.handle(IpcChannels.settingsSet, (_e, patch: Partial<Settings>): Settings => {
-    stubSettings = { ...stubSettings, ...patch }
-    return stubSettings
-  })
+  // --- Settings (REAL — RONY-12, persisted in SQLite) ---
+  ipcMain.handle(IpcChannels.settingsGet, (): Settings => getSettings())
+  ipcMain.handle(
+    IpcChannels.settingsSet,
+    (_e, patch: Partial<Settings>): Settings => updateSettings(patch)
+  )
 
   // --- Scan pipeline (RONY-7 fetch → RONY-9/RONY-10 classify → RONY-11 download) ---
   // Fetch recent Gmail messages (RONY-7), classify each with the engine the user
@@ -94,7 +83,8 @@ export function registerIpcHandlers(): void {
   // matched emails' PDF/image attachments and record them in SQLite (RONY-11).
   // Triggered by the RONY-14 "Scan now" button.
   ipcMain.handle(IpcChannels.scanRun, async (): Promise<ScanResult> => {
-    const engine = stubSettings.defaultEngine
+    // Use the user's persisted engine choice (RONY-12).
+    const engine = getSettings().defaultEngine
 
     // Fail fast (before fetching) with a readable message if the AI engine is
     // selected but no API key is configured — beats 50 per-email failures.

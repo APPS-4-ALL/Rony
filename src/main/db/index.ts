@@ -66,6 +66,11 @@ export function initDatabase(): Database.Database {
     -- the DB itself block duplicate downloads even under concurrent scans.
     CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_local_file_path
       ON invoices (local_file_path);
+    -- Simple key/value store for app settings (RONY-12), e.g. the default engine.
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
   `)
 
   console.log(`[db] SQLite ready at ${dbPath}`)
@@ -125,6 +130,26 @@ export function tryInsertInvoice(invoice: NewInvoice): boolean {
     )
     .run(invoice)
   return info.changes > 0
+}
+
+/* ----------------------------- app settings (RONY-12) ----------------------------- */
+
+/** Read a settings value by key, or undefined if unset. */
+export function getSetting(key: string): string | undefined {
+  const row = getDb().prepare('SELECT value FROM app_settings WHERE key = ?').get(key) as
+    | { value: string }
+    | undefined
+  return row?.value
+}
+
+/** Upsert a settings value. */
+export function setSetting(key: string, value: string): void {
+  getDb()
+    .prepare(
+      `INSERT INTO app_settings (key, value) VALUES (?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+    )
+    .run(key, value)
 }
 
 /**
