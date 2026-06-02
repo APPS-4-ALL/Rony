@@ -7,8 +7,11 @@ import { getAuthStatus, login, logout } from '../auth'
 import { fetchEmails } from '../gmail'
 import { toDeterministicInput } from '../gmail/parse'
 import { classifyDeterministic } from '../../shared/engines/deterministic'
-import { downloadAndRecord, getInvoicesDir, type ApprovedEmail } from '../download'
+import { downloadAndRecord, getInvoicesDir } from '../download'
 import { isPathInsideDir } from '../lib/pathSafety'
+import { selectApproved } from '../scan/classify'
+import { classifyWithAI } from '../engines/ai'
+import { getProviderConfig, resolveProvider } from '../engines/ai/config'
 
 /* ------------------------------------------------------------------ *
  * Remaining Step-0 STUB state (settings + scan).
@@ -85,27 +88,37 @@ export function registerIpcHandlers(): void {
     return stubSettings
   })
 
-  // --- Scan pipeline (RONY-7 fetch + RONY-9 classify + RONY-11 download) ---
-  // Fetch recent Gmail messages (RONY-7), classify each with the deterministic
-  // engine (RONY-9), then download the matched emails' PDF/image attachments to
-  // the local folder and record them in SQLite (RONY-11). Wiring the AI engine
-  // (RONY-10) into this path is a later round.
+  // --- Scan pipeline (RONY-7 fetch → RONY-9/RONY-10 classify → RONY-11 download) ---
+  // Fetch recent Gmail messages (RONY-7), classify each with the engine the user
+  // selected in settings (RONY-9 deterministic OR RONY-10 AI), then download the
+  // matched emails' PDF/image attachments and record them in SQLite (RONY-11).
+  // Triggered by the RONY-14 "Scan now" button.
   ipcMain.handle(IpcChannels.scanRun, async (): Promise<ScanResult> => {
-    const { emails, errors } = await fetchEmails()
+    const engine = stubSettings.defaultEngine
 
-    const approved: ApprovedEmail[] = []
-    for (const email of emails) {
-      if (classifyDeterministic(toDeterministicInput(email)).isInvoice) {
-        approved.push({ email, engineType: 'deterministic' })
-      }
-    }
+    // Fail fast (before fetching) with a readable message if the AI engine is
+    // selected but no API key is configured — beats 50 per-email failures.
+    if (engine === 'ai') getProviderConfig(resolveProvider())
+
+    const { emails, errors: fetchErrors } = await fetchEmails()
+
+    const { approved, errors: classifyErrors } = await selectApproved(emails, engine, {
+      deterministic: (email) => classifyDeterministic(toDeterministicInput(email)).isInvoice,
+      ai: (email) =>
+        classifyWithAI({
+          subject: email.subject,
+          body: email.bodyText,
+          from: email.from,
+          filenames: email.attachments.map((a) => a.filename)
+        })
+    })
 
     const download = await downloadAndRecord(approved)
     return {
       scanned: emails.length,
       matched: approved.length,
       downloaded: download.downloaded,
-      errors: errors + download.errors
+      errors: fetchErrors + classifyErrors + download.errors
     }
   })
 
