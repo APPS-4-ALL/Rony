@@ -5,6 +5,7 @@ import {
   formatDate,
   sortInvoices,
   filterInvoices,
+  invoicesToCsv,
   type SortKey
 } from './invoiceTable'
 import type { Invoice } from '@shared/types'
@@ -97,5 +98,34 @@ describe('filterInvoices', () => {
   it('matches the engine label and the raw amount', () => {
     expect(filterInvoices(list, 'AI').map((i) => i.id)).toEqual([1])
     expect(filterInvoices(list, '12').map((i) => i.id)).toEqual([2])
+  })
+})
+
+describe('invoicesToCsv', () => {
+  it('emits a header and one CRLF-separated row per invoice with machine-friendly values', () => {
+    const csv = invoicesToCsv([
+      inv({ date: '2026-05-01', vendor: 'Acme', amount: 1234.5, currency: 'ILS', engineType: 'ai' })
+    ])
+    const [header, row] = csv.split('\r\n')
+    expect(header).toBe('Date,Vendor,Amount,Currency,Found by,Status,File')
+    // Raw numeric amount (no thousands separators), AI label.
+    expect(row).toBe('2026-05-01,Acme,1234.5,ILS,AI,pending,')
+  })
+
+  it('escapes commas, quotes, and newlines per RFC 4180', () => {
+    const csv = invoicesToCsv([inv({ vendor: 'Smith, "Bob" & Co\nLtd' })])
+    expect(csv.split('\r\n')[1]).toContain('"Smith, ""Bob"" & Co\nLtd"')
+  })
+
+  it('renders null fields as empty cells and preserves Hebrew', () => {
+    const csv = invoicesToCsv([
+      inv({ date: null, vendor: 'חשבונית בע״מ', amount: null, currency: null })
+    ])
+    const row = csv.split('\r\n')[1]
+    expect(row.startsWith(',חשבונית בע״מ,,,')).toBe(true)
+  })
+
+  it('returns just the header for an empty list', () => {
+    expect(invoicesToCsv([])).toBe('Date,Vendor,Amount,Currency,Found by,Status,File')
   })
 })
