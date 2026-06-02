@@ -198,3 +198,58 @@ export function toDeterministicInput(email: ParsedEmail): DeterministicInput {
     filenames: email.attachments.map((a) => a.filename)
   }
 }
+
+/* ------------------------------------------------------------------ *
+ * Attachment-type filtering (RONY-7).
+ *
+ * The ticket scopes RONY-7 to messages whose attachments are PDFs or images.
+ * We judge by MIME type first (authoritative), falling back to the filename
+ * extension when a sender mislabels the part as application/octet-stream.
+ * ------------------------------------------------------------------ */
+
+/** File extensions we treat as images (lower-case, no dot). */
+const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'bmp', 'tif', 'tiff']
+
+/** True if the attachment is a PDF or an image (by MIME type or extension). */
+export function isPdfOrImage(att: GmailAttachmentRef): boolean {
+  const mime = att.mimeType.toLowerCase()
+  if (mime === 'application/pdf' || mime.startsWith('image/')) return true
+  const ext = att.filename.toLowerCase().split('.').pop() ?? ''
+  return ext === 'pdf' || IMAGE_EXTENSIONS.includes(ext)
+}
+
+/** Options that shape the Gmail search query RONY-7 runs. */
+export interface SearchQueryOptions {
+  /** Lower date bound, inclusive (ISO YYYY-MM-DD). */
+  after?: string
+  /** Upper date bound, exclusive (ISO YYYY-MM-DD). */
+  before?: string
+  /** Used only when neither `after` nor `before` is given (e.g. "1y", "90d"). */
+  defaultWindow?: string
+}
+
+/** Gmail's date operators want YYYY/MM/DD; accept ISO YYYY-MM-DD and convert. */
+function toGmailDate(iso: string): string {
+  return iso.replace(/-/g, '/')
+}
+
+/**
+ * Build the Gmail search query for RONY-7: messages that carry a PDF or image
+ * attachment, optionally bounded by a date range. We constrain at the Gmail
+ * level (not just client-side) so we page over far fewer messages.
+ *
+ * The `filename:` terms match by extension; the per-attachment MIME check in
+ * the fetch layer is the authoritative second pass.
+ */
+export function buildSearchQuery(opts: SearchQueryOptions = {}): string {
+  const exts = ['pdf', ...IMAGE_EXTENSIONS]
+  const parts = ['has:attachment', `filename:(${exts.join(' OR ')})`]
+
+  if (opts.after) parts.push(`after:${toGmailDate(opts.after)}`)
+  if (opts.before) parts.push(`before:${toGmailDate(opts.before)}`)
+  if (!opts.after && !opts.before && opts.defaultWindow) {
+    parts.push(`newer_than:${opts.defaultWindow}`)
+  }
+
+  return parts.join(' ')
+}

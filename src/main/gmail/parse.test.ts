@@ -5,7 +5,10 @@ import {
   stripHtml,
   parseMessage,
   toDeterministicInput,
-  type GmailMessage
+  isPdfOrImage,
+  buildSearchQuery,
+  type GmailMessage,
+  type GmailAttachmentRef
 } from './parse'
 import { classifyDeterministic } from '../../shared/engines/deterministic'
 
@@ -138,6 +141,60 @@ describe('parseMessage — attachments', () => {
         size: 20480
       }
     ])
+  })
+})
+
+describe('isPdfOrImage — PDF/image attachment filter', () => {
+  const att = (over: Partial<GmailAttachmentRef>): GmailAttachmentRef => ({
+    filename: 'file',
+    mimeType: 'application/octet-stream',
+    attachmentId: 'A',
+    size: 1,
+    ...over
+  })
+
+  it('accepts PDFs and images by MIME type', () => {
+    expect(isPdfOrImage(att({ mimeType: 'application/pdf' }))).toBe(true)
+    expect(isPdfOrImage(att({ mimeType: 'image/png' }))).toBe(true)
+    expect(isPdfOrImage(att({ mimeType: 'image/jpeg' }))).toBe(true)
+  })
+
+  it('falls back to the filename extension when MIME is generic', () => {
+    expect(isPdfOrImage(att({ filename: 'invoice.PDF' }))).toBe(true)
+    expect(isPdfOrImage(att({ filename: 'scan.JPG' }))).toBe(true)
+    expect(isPdfOrImage(att({ filename: 'receipt.heic' }))).toBe(true)
+  })
+
+  it('rejects non-PDF/image attachments', () => {
+    expect(isPdfOrImage(att({ mimeType: 'application/zip', filename: 'a.zip' }))).toBe(false)
+    expect(
+      isPdfOrImage(
+        att({
+          mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          filename: 'a.docx'
+        })
+      )
+    ).toBe(false)
+    expect(isPdfOrImage(att({ mimeType: 'text/csv', filename: 'a.csv' }))).toBe(false)
+  })
+})
+
+describe('buildSearchQuery — PDF/image + date range', () => {
+  it('always constrains to PDF/image attachments', () => {
+    const q = buildSearchQuery()
+    expect(q).toContain('has:attachment')
+    expect(q).toContain('filename:(pdf OR jpg OR jpeg OR png')
+  })
+
+  it('uses the default window only when no range is given', () => {
+    expect(buildSearchQuery({ defaultWindow: '1y' })).toContain('newer_than:1y')
+  })
+
+  it('converts ISO dates to Gmail YYYY/MM/DD and omits the default window', () => {
+    const q = buildSearchQuery({ after: '2026-01-01', before: '2026-06-30', defaultWindow: '1y' })
+    expect(q).toContain('after:2026/01/01')
+    expect(q).toContain('before:2026/06/30')
+    expect(q).not.toContain('newer_than')
   })
 })
 
