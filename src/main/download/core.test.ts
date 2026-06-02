@@ -6,14 +6,16 @@ import { downloadApproved, sanitizeFilename, type ApprovedEmail, type InvoiceSto
 import type { NewInvoice } from '../../shared/types'
 import type { GmailAttachmentRef, ParsedEmail } from '../gmail/parse'
 
-/** In-memory store that records inserts, so we can assert on the DB rows. */
+/** In-memory store that records inserts (conflict-safe, like the real SQLite one). */
 function fakeStore(): InvoiceStore & { rows: NewInvoice[] } {
   const rows: NewInvoice[] = []
   return {
     rows,
     existsByPath: (path) => rows.some((r) => r.localFilePath === path),
     insert: (invoice) => {
+      if (rows.some((r) => r.localFilePath === invoice.localFilePath)) return false
       rows.push(invoice)
+      return true
     }
   }
 }
@@ -79,16 +81,16 @@ describe('downloadApproved — RONY-11 DoD', () => {
 
     expect(summary).toEqual({ downloaded: 2, skipped: 0, errors: 0 })
 
-    // Files exist on disk...
-    const pdfPath = join(targetDir, 'msg1__invoice.pdf')
-    const imgPath = join(targetDir, 'msg1__receipt.jpg')
+    // Files exist on disk (file name carries the attachment index — see #1)...
+    const pdfPath = join(targetDir, 'msg1__0__invoice.pdf')
+    const imgPath = join(targetDir, 'msg1__1__receipt.jpg')
     expect(existsSync(pdfPath)).toBe(true)
     expect(existsSync(imgPath)).toBe(true)
     expect(readFileSync(pdfPath).toString()).toBe('bytes-for-A1')
 
     // ...and a SQLite-bound row was recorded for each, carrying the file path.
     expect(store.rows).toHaveLength(2)
-    expect(store.rows[0]).toMatchObject({
+    expect(store.rows.find((r) => r.localFilePath === pdfPath)).toMatchObject({
       messageId: 'msg1',
       localFilePath: pdfPath,
       status: 'downloaded',
@@ -96,7 +98,7 @@ describe('downloadApproved — RONY-11 DoD', () => {
     })
   })
 
-  it('is idempotent — a second run skips already-recorded files (dedup)', async () => {
+  it('is idempotent — a second run skips files already on disk + recorded (dedup)', async () => {
     const targetDir = tempDir()
     const store = fakeStore()
     const approved = [approvedEmail([att()])]
@@ -115,6 +117,69 @@ describe('downloadApproved — RONY-11 DoD', () => {
     expect(first.downloaded).toBe(1)
     expect(second).toMatchObject({ downloaded: 0, skipped: 1 })
     expect(store.rows).toHaveLength(1) // no duplicate row
+  })
+
+  // #1 — same-name attachments in one email must NOT silently drop one of them.
+  it('keeps both files when an email has two same-named attachments', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    const approved = [
+      approvedEmail([
+        att({ filename: 'invoice.pdf', attachmentId: 'A1' }),
+        att({ filename: 'invoice.pdf', attachmentId: 'A2' })
+      ])
+    ]
+
+    const summary = await downloadApproved(approved, {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      store
+    })
+
+    expect(summary).toMatchObject({ downloaded: 2 })
+    expect(store.rows).toHaveLength(2)
+    expect(new Set(store.rows.map((r) => r.localFilePath)).size).toBe(2) // distinct paths
+    // The SECOND file's bytes were not lost to a name collision.
+    expect(readFileSync(join(targetDir, 'msg1__1__invoice.pdf')).toString()).toBe('bytes-for-A2')
+  })
+
+  // #3 — a file the user deleted from disk is re-fetched, without a duplicate row.
+  it('restores a deleted file without inserting a duplicate row', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    const approved = [approvedEmail([att()])]
+
+    await downloadApproved(approved, { targetDir, fetchAttachment: fakeFetch(), store })
+    const filePath = store.rows[0].localFilePath as string
+    rmSync(filePath) // user deletes the file, DB row remains
+    expect(existsSync(filePath)).toBe(false)
+
+    const second = await downloadApproved(approved, {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      store
+    })
+
+    expect(second).toMatchObject({ downloaded: 1 }) // restored
+    expect(existsSync(filePath)).toBe(true)
+    expect(store.rows).toHaveLength(1) // no duplicate row
+  })
+
+  // #2 — if a concurrent scan wins the insert race, count it as skipped.
+  it('counts a lost insert race as skipped, not downloaded', async () => {
+    const targetDir = tempDir()
+    const store: InvoiceStore = {
+      existsByPath: () => false, // not recorded when we checked...
+      insert: () => false // ...but the conflict-safe insert lost the race
+    }
+
+    const summary = await downloadApproved([approvedEmail([att()])], {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      store
+    })
+
+    expect(summary).toMatchObject({ downloaded: 0, skipped: 1 })
   })
 
   it('skips inline data (no attachmentId) and tiny logo-sized images', async () => {
