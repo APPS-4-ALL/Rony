@@ -3,6 +3,14 @@ import { onMounted, ref } from 'vue'
 import type { Invoice, ScanResult } from '@shared/types'
 import InvoicesTable from './components/InvoicesTable.vue'
 import SettingsView from './components/SettingsView.vue'
+import { useI18n } from './lib/useI18n'
+
+const { t, locale, setLocale } = useI18n()
+
+/** Flip between the two languages from the header toggle. */
+function toggleLocale(): void {
+  setLocale(locale.value === 'he' ? 'en' : 'he')
+}
 
 type View = 'dashboard' | 'settings'
 const view = ref<View>('dashboard')
@@ -66,7 +74,14 @@ const onAddSample = (): Promise<void> =>
     await refresh()
   })
 
-onMounted(() => withGuard(refresh))
+/** Apply the persisted language as early as possible, then load the table. */
+onMounted(() =>
+  withGuard(async () => {
+    const settings = await window.api.settings.get()
+    setLocale(settings.locale)
+    await refresh()
+  })
+)
 </script>
 
 <template>
@@ -74,14 +89,20 @@ onMounted(() => withGuard(refresh))
     <div class="mx-auto max-w-3xl px-6 py-10">
       <!-- Header -->
       <header class="mb-8">
-        <p class="text-sm font-semibold uppercase tracking-widest text-emerald-400">
-          Roni · Local-first
-        </p>
-        <h1 class="mt-1 text-3xl font-bold">Invoice &amp; Receipt Scanner</h1>
-        <p class="mt-2 text-slate-400">
-          Scans your Gmail for invoices and receipts, downloads them locally, and centralises them
-          in one dashboard.
-        </p>
+        <div class="flex items-start justify-between gap-4">
+          <p class="text-sm font-semibold uppercase tracking-widest text-emerald-400">
+            {{ t('app.tagline') }}
+          </p>
+          <button
+            class="rounded-lg border border-slate-700 px-3 py-1 text-xs font-semibold text-slate-300 transition hover:border-emerald-500 hover:text-emerald-300"
+            :title="locale === 'he' ? 'Switch to English' : 'מעבר לעברית'"
+            @click="toggleLocale"
+          >
+            {{ locale === 'he' ? 'English' : 'עברית' }}
+          </button>
+        </div>
+        <h1 class="mt-1 text-3xl font-bold">{{ t('app.title') }}</h1>
+        <p class="mt-2 text-slate-400">{{ t('app.subtitle') }}</p>
       </header>
 
       <!-- View tabs (RONY-12) -->
@@ -89,7 +110,7 @@ onMounted(() => withGuard(refresh))
         <button
           v-for="tab in ['dashboard', 'settings'] as const"
           :key="tab"
-          class="-mb-px border-b-2 px-4 py-2 text-sm font-medium capitalize transition"
+          class="-mb-px border-b-2 px-4 py-2 text-sm font-medium transition"
           :class="
             view === tab
               ? 'border-emerald-400 text-emerald-300'
@@ -97,7 +118,7 @@ onMounted(() => withGuard(refresh))
           "
           @click="view = tab"
         >
-          {{ tab }}
+          {{ t(`nav.${tab}`) }}
         </button>
       </nav>
 
@@ -119,11 +140,8 @@ onMounted(() => withGuard(refresh))
 
         <!-- Backend self-check: exercises IPC (RONY-4) + SQLite (RONY-3) -->
         <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
-          <h2 class="text-lg font-semibold">Backend connectivity</h2>
-          <p class="mt-1 text-sm text-slate-400">
-            These buttons call the Electron main process over a secure IPC bridge, which reads and
-            writes the local SQLite database.
-          </p>
+          <h2 class="text-lg font-semibold">{{ t('backend.title') }}</h2>
+          <p class="mt-1 text-sm text-slate-400">{{ t('backend.desc') }}</p>
 
           <div class="mt-4 flex flex-wrap items-center gap-3">
             <button
@@ -131,10 +149,10 @@ onMounted(() => withGuard(refresh))
               :disabled="busy"
               @click="onPing"
             >
-              Ping main process
+              {{ t('backend.ping') }}
             </button>
             <span v-if="pingResult" class="text-sm text-emerald-400">
-              → main replied: <code class="font-mono">{{ pingResult }}</code>
+              {{ t('backend.replied') }} <code class="font-mono">{{ pingResult }}</code>
             </span>
           </div>
 
@@ -144,17 +162,17 @@ onMounted(() => withGuard(refresh))
               :disabled="busy"
               @click="onAddSample"
             >
-              Add sample invoice
+              {{ t('backend.addSample') }}
             </button>
             <button
               class="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-emerald-500 hover:text-emerald-300 disabled:opacity-50"
               :disabled="busy"
               @click="() => withGuard(refresh)"
             >
-              Refresh
+              {{ t('backend.refresh') }}
             </button>
             <span class="text-sm text-slate-400">
-              Rows in local DB: <span class="font-semibold text-slate-100">{{ count }}</span>
+              {{ t('backend.rows') }} <span class="font-semibold text-slate-100">{{ count }}</span>
             </span>
           </div>
 
@@ -167,11 +185,8 @@ onMounted(() => withGuard(refresh))
         <section class="mt-6 rounded-xl border border-slate-800 bg-slate-900/60 p-6">
           <div class="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h2 class="text-lg font-semibold">Scan your inbox</h2>
-              <p class="mt-1 text-sm text-slate-400">
-                Fetch recent Gmail messages, detect invoices &amp; receipts, and download them
-                locally.
-              </p>
+              <h2 class="text-lg font-semibold">{{ t('scan.title') }}</h2>
+              <p class="mt-1 text-sm text-slate-400">{{ t('scan.desc') }}</p>
             </div>
             <button
               class="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
@@ -199,7 +214,7 @@ onMounted(() => withGuard(refresh))
                   d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
                 />
               </svg>
-              {{ scanning ? 'Scanning…' : 'Scan now' }}
+              {{ scanning ? t('scan.scanning') : t('scan.now') }}
             </button>
           </div>
 
@@ -207,12 +222,14 @@ onMounted(() => withGuard(refresh))
             v-if="scanSummary"
             class="mt-4 rounded-lg bg-slate-800/60 px-3 py-2 text-sm text-slate-300"
           >
-            Scanned <span class="font-semibold text-slate-100">{{ scanSummary.scanned }}</span> ·
-            matched <span class="font-semibold text-slate-100">{{ scanSummary.matched }}</span> ·
-            downloaded
+            {{ t('scan.scanned') }}
+            <span class="font-semibold text-slate-100">{{ scanSummary.scanned }}</span> ·
+            {{ t('scan.matched') }}
+            <span class="font-semibold text-slate-100">{{ scanSummary.matched }}</span> ·
+            {{ t('scan.downloaded') }}
             <span class="font-semibold text-emerald-300">{{ scanSummary.downloaded }}</span>
             <span v-if="scanSummary.errors > 0" class="text-amber-300">
-              · {{ scanSummary.errors }} error{{ scanSummary.errors === 1 ? '' : 's' }}
+              · {{ t('scan.errors', { count: scanSummary.errors }) }}
             </span>
           </p>
           <p v-if="scanError" class="mt-4 rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">
