@@ -12,7 +12,7 @@ const api: RoniApi = {
     list: () => ipcRenderer.invoke(IpcChannels.invoicesList),
     count: () => ipcRenderer.invoke(IpcChannels.invoicesCount),
     addSample: () => ipcRenderer.invoke(IpcChannels.invoicesAddSample),
-    openFile: (path) => ipcRenderer.invoke(IpcChannels.invoicesOpenFile, path)
+    openFile: (invoiceId) => ipcRenderer.invoke(IpcChannels.invoicesOpenFile, invoiceId)
   },
   auth: {
     status: () => ipcRenderer.invoke(IpcChannels.authStatus),
