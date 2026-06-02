@@ -98,6 +98,14 @@ export function countInvoices(): number {
   return n
 }
 
+/** True if an invoice row already references this local file path (RONY-11 dedup). */
+export function invoiceExistsByPath(localFilePath: string): boolean {
+  const row = getDb()
+    .prepare('SELECT 1 FROM invoices WHERE local_file_path = ? LIMIT 1')
+    .get(localFilePath)
+  return row !== undefined
+}
+
 /**
  * RONY-3 Definition of Done: write a test row and read it back on startup,
  * proving the local DB round-trips correctly. Logs the result to the console.
