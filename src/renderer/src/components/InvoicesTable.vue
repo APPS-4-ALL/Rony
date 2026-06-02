@@ -47,11 +47,12 @@ function sortIndicator(key: SortKey): string {
 
 const openError = ref('')
 
-/** Open the invoice's local file via the OS (RONY-13 DoD button). */
+/** Open the invoice's local file via the OS (RONY-13 DoD button). We send only
+ * the invoice id — the main process resolves + validates the path (security). */
 async function openFile(inv: Invoice): Promise<void> {
   openError.value = ''
   if (!inv.localFilePath) return
-  const err = await window.api.invoices.openFile(inv.localFilePath)
+  const err = await window.api.invoices.openFile(inv.id)
   if (err) openError.value = err
 }
 </script>

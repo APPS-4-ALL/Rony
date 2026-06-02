@@ -87,10 +87,12 @@ export interface RoniApi {
     addSample: () => Promise<Invoice>
     /**
      * Open a downloaded invoice file with the OS default app (RONY-13 "Open
-     * file" button). Resolves with an empty string on success, or an OS error
-     * message if the path is missing/unopenable.
+     * file" button). Takes the invoice's ID — NOT a path: the main process
+     * looks up the file path in SQLite and validates it before opening, so the
+     * untrusted renderer can never ask the OS to open an arbitrary path.
+     * Resolves with an empty string on success, or an error message otherwise.
      */
-    openFile: (path: string) => Promise<string>
+    openFile: (invoiceId: number) => Promise<string>
   }
   /** Google OAuth / Gmail connection (RONY-6, RONY-12). */
   auth: {

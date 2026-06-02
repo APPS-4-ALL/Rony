@@ -2,12 +2,13 @@ import { writeFile } from 'node:fs/promises'
 import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { IpcChannels } from '../../shared/ipc'
 import type { SaveFileRequest, ScanResult, Settings } from '../../shared/types'
-import { countInvoices, insertInvoice, listInvoices } from '../db'
+import { countInvoices, getInvoiceById, insertInvoice, listInvoices } from '../db'
 import { getAuthStatus, login, logout } from '../auth'
 import { fetchEmails } from '../gmail'
 import { toDeterministicInput } from '../gmail/parse'
 import { classifyDeterministic } from '../../shared/engines/deterministic'
-import { downloadAndRecord, type ApprovedEmail } from '../download'
+import { downloadAndRecord, getInvoicesDir, type ApprovedEmail } from '../download'
+import { isPathInsideDir } from '../lib/pathSafety'
 
 /* ------------------------------------------------------------------ *
  * Remaining Step-0 STUB state (settings + scan).
@@ -47,10 +48,29 @@ export function registerIpcHandlers(): void {
     })
   )
   // Open a downloaded invoice with the OS default app (RONY-13 "Open file").
-  // shell.openPath returns '' on success or an error string on failure.
-  ipcMain.handle(IpcChannels.invoicesOpenFile, (_e, path: string) => {
-    if (!path) return Promise.resolve('No file is associated with this invoice yet.')
-    return shell.openPath(path)
+  //
+  // SECURITY: the renderer is untrusted, so it sends only the invoice ID — NOT
+  // a path. We look the path up in SQLite ourselves and verify it resolves
+  // inside the authorized invoices folder before handing it to the OS. This
+  // prevents a compromised/XSS'd renderer from opening arbitrary system files.
+  // Returns '' on success (matching shell.openPath) or a readable error.
+  ipcMain.handle(IpcChannels.invoicesOpenFile, async (_e, invoiceId: number): Promise<string> => {
+    if (typeof invoiceId !== 'number' || !Number.isInteger(invoiceId)) {
+      return 'Invalid invoice id.'
+    }
+    const invoice = getInvoiceById(invoiceId)
+    if (!invoice) return 'Invoice not found.'
+    if (!invoice.localFilePath) return 'No file is associated with this invoice yet.'
+
+    // Containment check: the stored path MUST live inside Documents/Rony Invoices.
+    if (!isPathInsideDir(getInvoicesDir(), invoice.localFilePath)) {
+      console.error(
+        `[security] refused to open out-of-bounds path for invoice ${invoiceId}: ${invoice.localFilePath}`
+      )
+      return 'Refused to open a file outside the invoices folder.'
+    }
+
+    return shell.openPath(invoice.localFilePath)
   })
 
   // --- Auth (REAL — RONY-6) ---
