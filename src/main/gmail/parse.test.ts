@@ -1,0 +1,161 @@
+import { describe, it, expect } from 'vitest'
+import {
+  decodeBase64Url,
+  getHeader,
+  stripHtml,
+  parseMessage,
+  toDeterministicInput,
+  type GmailMessage
+} from './parse'
+import { classifyDeterministic } from '../../shared/engines/deterministic'
+
+/** Encode UTF-8 text the way Gmail does (base64url) for a part body. */
+function b64url(text: string): string {
+  return Buffer.from(text, 'utf-8').toString('base64url')
+}
+
+describe('decodeBase64Url', () => {
+  it('round-trips UTF-8 text (incl. Hebrew)', () => {
+    expect(decodeBase64Url(b64url('חשבונית מס 123'))).toBe('חשבונית מס 123')
+  })
+  it('returns empty string for undefined/garbage', () => {
+    expect(decodeBase64Url(undefined)).toBe('')
+  })
+})
+
+describe('getHeader', () => {
+  const headers = [
+    { name: 'Subject', value: 'Hello' },
+    { name: 'From', value: 'a@b.com' }
+  ]
+  it('is case-insensitive', () => {
+    expect(getHeader(headers, 'subject')).toBe('Hello')
+    expect(getHeader(headers, 'FROM')).toBe('a@b.com')
+  })
+  it('returns empty string when missing', () => {
+    expect(getHeader(headers, 'Cc')).toBe('')
+    expect(getHeader(undefined, 'Subject')).toBe('')
+  })
+})
+
+describe('stripHtml', () => {
+  it('drops script/style bodies, turns tags to spaces, collapses whitespace', () => {
+    const html = `<style>.x{color:red}</style><p>Your <b>invoice</b></p><script>evil()</script>`
+    expect(stripHtml(html)).toBe('Your invoice')
+  })
+  it('decodes common and numeric entities', () => {
+    expect(stripHtml('Tom &amp; Jerry &#39;s bill &#x26; co &nbsp;done')).toBe(
+      "Tom & Jerry 's bill & co done"
+    )
+  })
+})
+
+describe('parseMessage — body extraction', () => {
+  it('parses a simple text/plain message and its headers', () => {
+    const msg: GmailMessage = {
+      id: 'm1',
+      threadId: 't1',
+      snippet: 'preview',
+      internalDate: String(Date.UTC(2026, 4, 20)), // 2026-05-20
+      payload: {
+        mimeType: 'text/plain',
+        headers: [
+          { name: 'Subject', value: 'Your receipt' },
+          { name: 'From', value: 'Store <billing@store.com>' }
+        ],
+        body: { size: 11, data: b64url('Thank you!') }
+      }
+    }
+    const parsed = parseMessage(msg)
+    expect(parsed).toMatchObject({
+      id: 'm1',
+      threadId: 't1',
+      subject: 'Your receipt',
+      from: 'Store <billing@store.com>',
+      date: '2026-05-20',
+      snippet: 'preview',
+      bodyText: 'Thank you!',
+      attachments: []
+    })
+  })
+
+  it('prefers text/plain over text/html in a multipart/alternative', () => {
+    const msg: GmailMessage = {
+      id: 'm2',
+      payload: {
+        mimeType: 'multipart/alternative',
+        parts: [
+          { mimeType: 'text/plain', body: { data: b64url('plain version') } },
+          { mimeType: 'text/html', body: { data: b64url('<p>html <b>version</b></p>') } }
+        ]
+      }
+    }
+    expect(parseMessage(msg).bodyText).toBe('plain version')
+  })
+
+  it('falls back to stripped HTML when there is no plain part', () => {
+    const msg: GmailMessage = {
+      id: 'm3',
+      payload: {
+        mimeType: 'text/html',
+        body: { data: b64url('<h1>Tax Invoice</h1><p>Total: 100</p>') }
+      }
+    }
+    expect(parseMessage(msg).bodyText).toBe('Tax Invoice Total: 100')
+  })
+
+  it('returns null date for a missing/invalid internalDate', () => {
+    expect(parseMessage({ id: 'm4', payload: {} }).date).toBeNull()
+  })
+})
+
+describe('parseMessage — attachments', () => {
+  it('captures attachment metadata (incl. attachmentId) and excludes it from the body', () => {
+    const msg: GmailMessage = {
+      id: 'm5',
+      payload: {
+        mimeType: 'multipart/mixed',
+        parts: [
+          {
+            mimeType: 'multipart/alternative',
+            parts: [{ mimeType: 'text/plain', body: { data: b64url('See attached invoice.') } }]
+          },
+          {
+            mimeType: 'application/pdf',
+            filename: 'invoice_2026.pdf',
+            body: { size: 20480, attachmentId: 'ATT_123' }
+          }
+        ]
+      }
+    }
+    const parsed = parseMessage(msg)
+    expect(parsed.bodyText).toBe('See attached invoice.')
+    expect(parsed.attachments).toEqual([
+      {
+        filename: 'invoice_2026.pdf',
+        mimeType: 'application/pdf',
+        attachmentId: 'ATT_123',
+        size: 20480
+      }
+    ])
+  })
+})
+
+describe('RONY-7 → RONY-9 handoff', () => {
+  it('feeds a parsed Hebrew invoice email straight into the deterministic engine', () => {
+    const msg: GmailMessage = {
+      id: 'm6',
+      payload: {
+        mimeType: 'multipart/mixed',
+        headers: [{ name: 'Subject', value: 'החשבונית שלך מצורפת' }],
+        parts: [
+          { mimeType: 'text/plain', body: { data: b64url('שלום, מצורפת קבלה.') } },
+          { mimeType: 'application/pdf', filename: 'kabala.pdf', body: { attachmentId: 'A1' } }
+        ]
+      }
+    }
+    const result = classifyDeterministic(toDeterministicInput(parseMessage(msg)))
+    expect(result.isInvoice).toBe(true)
+    expect(result.matchedKeywords).toEqual(expect.arrayContaining(['חשבונית', 'קבלה']))
+  })
+})
