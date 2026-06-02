@@ -4,6 +4,9 @@ import { IpcChannels } from '../../shared/ipc'
 import type { SaveFileRequest, ScanResult, Settings } from '../../shared/types'
 import { countInvoices, insertInvoice, listInvoices } from '../db'
 import { getAuthStatus, login, logout } from '../auth'
+import { fetchEmails } from '../gmail'
+import { toDeterministicInput } from '../gmail/parse'
+import { classifyDeterministic } from '../../shared/engines/deterministic'
 
 /* ------------------------------------------------------------------ *
  * Remaining Step-0 STUB state (settings + scan).
@@ -16,8 +19,6 @@ import { getAuthStatus, login, logout } from '../auth'
  * Auth (RONY-6) is now REAL — see ../auth.
  * ------------------------------------------------------------------ */
 let stubSettings: Settings = { defaultEngine: 'deterministic' }
-
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
 /**
  * Registers all main-process IPC handlers. Uses `ipcMain.handle` so each call
@@ -57,12 +58,18 @@ export function registerIpcHandlers(): void {
     return stubSettings
   })
 
-  // --- Scan pipeline (STUB → RONY-7/9/10/11) ---
-  // Simulates a background scan so the Sync button (RONY-14) can show a
-  // real loading state. Returns an empty-but-valid summary.
+  // --- Scan pipeline (RONY-7 fetch + RONY-9 classify) ---
+  // Fetches recent Gmail messages (RONY-7) and runs each through the
+  // deterministic engine (RONY-9), reporting how many were inspected and how
+  // many look like invoices/receipts. Downloading the matched attachments and
+  // persisting rows is RONY-11 — that's why `downloaded` is still 0 here.
   ipcMain.handle(IpcChannels.scanRun, async (): Promise<ScanResult> => {
-    await sleep(1200)
-    return { scanned: 0, matched: 0, downloaded: 0, errors: 0 }
+    const { emails, errors } = await fetchEmails()
+    let matched = 0
+    for (const email of emails) {
+      if (classifyDeterministic(toDeterministicInput(email)).isInvoice) matched++
+    }
+    return { scanned: emails.length, matched, downloaded: 0, errors }
   })
 
   // --- Native save dialog (REAL — usable today by RONY-15) ---
