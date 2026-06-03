@@ -1,5 +1,5 @@
 appId: net.apps4all.roni-invoices
-productName: roni-invoices
+productName: Rony
 directories:
   buildResources: build
 files:

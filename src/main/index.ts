@@ -11,6 +11,7 @@ function createWindow(): void {
     width: 900,
     height: 670,
     show: false,
+    title: 'Rony',
     autoHideMenuBar: true,
     // Use our app icon for the window + taskbar (macOS uses the packaged
     // bundle icon, so the BrowserWindow option there is harmless).
