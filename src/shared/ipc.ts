@@ -19,6 +19,8 @@ export const IpcChannels = {
   settingsHasApiKey: 'settings:hasApiKey',
   settingsClearApiKey: 'settings:clearApiKey',
   scanRun: 'scan:run',
+  /** One-way main → renderer event carrying live scan progress. */
+  scanProgress: 'scan:progress',
   dialogSaveFile: 'dialog:saveFile'
 } as const
 

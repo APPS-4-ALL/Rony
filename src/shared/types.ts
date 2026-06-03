@@ -56,6 +56,22 @@ export interface Settings {
   aiProvider: AiProvider
 }
 
+/** The phases a scan moves through, reported live via `scan.onProgress`. */
+export type ScanPhase = 'fetching' | 'classifying' | 'downloading' | 'done'
+
+/** Live progress for an in-flight scan (X of Y). */
+export interface ScanProgress {
+  phase: ScanPhase
+  /** Items handled so far in the current phase. */
+  processed: number
+  /** Total items in the current phase (0 = indeterminate). */
+  total: number
+  /** Running count of emails classified as invoices/receipts. */
+  matched: number
+  /** Running count of files downloaded. */
+  downloaded: number
+}
+
 /** Summary returned when a scan finishes (RONY-14 shows this on completion). */
 export interface ScanResult {
   /** Emails inspected. */
@@ -66,6 +82,8 @@ export interface ScanResult {
   downloaded: number
   /** Failures encountered (non-fatal). */
   errors: number
+  /** A representative error message when `errors > 0` (e.g. "Gemini API error 400: API key not valid"). */
+  errorSample?: string
 }
 
 /** Request payload for the native "save file" dialog (RONY-15 CSV export). */
@@ -124,8 +142,13 @@ export interface RoniApi {
   }
   /** Gmail sync + scan pipeline (RONY-7/9/10/11, triggered by RONY-14). */
   scan: {
-    /** Run a full scan in the background; resolves with a summary. */
+    /** Run a scan in the background; resolves with a summary. */
     run: () => Promise<ScanResult>
+    /**
+     * Subscribe to live scan progress. Returns an unsubscribe function — call it
+     * (e.g. on unmount) to stop listening.
+     */
+    onProgress: (callback: (progress: ScanProgress) => void) => () => void
   }
   /** Native OS dialogs (RONY-15). */
   dialog: {

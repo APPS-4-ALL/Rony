@@ -7,6 +7,7 @@
  * Raw `fetch`, no SDK; output is validated by the engine's central normalizer.
  */
 import type { ProviderComplete } from '../types'
+import { extractApiError } from './errors'
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
 
@@ -41,7 +42,7 @@ export const completeGemini: ProviderComplete = async ({ system, user, cfg }) =>
 
   if (!res.ok) {
     const detail = await res.text().catch(() => '')
-    throw new Error(`Gemini API error ${res.status}: ${detail.slice(0, 300)}`)
+    throw new Error(`Gemini API error ${res.status}: ${extractApiError(detail)}`)
   }
 
   const data = (await res.json()) as {
