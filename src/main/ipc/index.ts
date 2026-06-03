@@ -10,14 +10,16 @@ import type {
 } from '../../shared/types'
 import { sanitizeScanOptions } from '../scan/options'
 import { getInvoiceById, listInvoices } from '../db'
-import { getAuthStatus, login, logout } from '../auth'
-import { fetchEmails } from '../gmail'
+import { getAuthStatus, getAuthorizedClient, login, logout } from '../auth'
+import { fetchAttachmentData, fetchEmails } from '../gmail'
 import { toDeterministicInput } from '../gmail/parse'
 import { classifyDeterministic } from '../../shared/engines/deterministic'
 import { downloadAndRecord, getEffectiveInvoicesDir, getInvoicesDir } from '../download'
 import { isPathInsideDir } from '../lib/pathSafety'
 import { selectApproved } from '../scan/classify'
 import { classifyWithAI } from '../engines/ai'
+import type { AiAttachment } from '../engines/ai/types'
+import { pickInvoiceAttachment } from '../engines/ai/attachments'
 import { getProviderConfig } from '../engines/ai/config'
 import { getSettings, updateSettings } from '../settings'
 import { clearApiKey, getApiKey, hasApiKey, setApiKey } from '../settings/apiKeyStore'
@@ -114,6 +116,26 @@ export function registerIpcHandlers(): void {
       firstError: fetchFirstError
     } = await fetchEmails(sanitizeScanOptions(rawOpts))
 
+    // RONY-10: give the AI engine the invoice document itself so it can read
+    // fields (notably the TOTAL amount) that live inside the PDF/image rather
+    // than in the email text. We download ONE representative attachment per
+    // email; any failure falls back to text-only classification (never fatal).
+    const client = getAuthorizedClient()
+    const loadVisionAttachment = async (
+      email: (typeof emails)[number]
+    ): Promise<AiAttachment[] | undefined> => {
+      if (!client) return undefined
+      const chosen = pickInvoiceAttachment(email.attachments)
+      if (!chosen?.attachmentId) return undefined
+      try {
+        const data = await fetchAttachmentData(client, email.id, chosen.attachmentId)
+        return [{ filename: chosen.filename, mimeType: chosen.mimeType, data }]
+      } catch (e) {
+        console.error(`[scan] vision attachment fetch failed for ${email.id} (text-only):`, e)
+        return undefined
+      }
+    }
+
     const {
       approved,
       errors: classifyErrors,
@@ -123,13 +145,14 @@ export function registerIpcHandlers(): void {
       engine,
       {
         deterministic: (email) => classifyDeterministic(toDeterministicInput(email)).isInvoice,
-        ai: (email) =>
+        ai: async (email) =>
           classifyWithAI(
             {
               subject: email.subject,
               body: email.bodyText,
               from: email.from,
-              filenames: email.attachments.map((a) => a.filename)
+              filenames: email.attachments.map((a) => a.filename),
+              attachments: await loadVisionAttachment(email)
             },
             { provider: aiProvider, apiKey: aiApiKey }
           )

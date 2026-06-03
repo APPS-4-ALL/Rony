@@ -6,12 +6,28 @@
  * constrained decoding made gemini-2.5-flash loop/garble on Hebrew input.
  * Raw `fetch`, no SDK; output is validated by the engine's central normalizer.
  */
-import type { ProviderComplete } from '../types'
+import type { AiAttachment, ProviderComplete } from '../types'
 import { extractApiError } from './errors'
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
 
-export const completeGemini: ProviderComplete = async ({ system, user, cfg }) => {
+/** A single `parts[]` entry of a Gemini `user` content turn. */
+type GeminiPart = { text: string } | { inlineData: { mimeType: string; data: string } }
+
+/**
+ * Build the user turn's `parts`: the text prompt first, then any attachments as
+ * `inlineData` (base64). Gemini reads PDFs and images natively this way.
+ * Exported for unit testing.
+ */
+export function buildGeminiParts(user: string, attachments?: AiAttachment[]): GeminiPart[] {
+  const parts: GeminiPart[] = [{ text: user }]
+  for (const att of attachments ?? []) {
+    parts.push({ inlineData: { mimeType: att.mimeType, data: att.data.toString('base64') } })
+  }
+  return parts
+}
+
+export const completeGemini: ProviderComplete = async ({ system, user, cfg, attachments }) => {
   const url = `${GEMINI_BASE}/${encodeURIComponent(cfg.model)}:generateContent`
 
   const res = await fetch(url, {
@@ -23,7 +39,7 @@ export const completeGemini: ProviderComplete = async ({ system, user, cfg }) =>
     },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },
-      contents: [{ role: 'user', parts: [{ text: user }] }],
+      contents: [{ role: 'user', parts: buildGeminiParts(user, attachments) }],
       generationConfig: {
         // A small non-zero temperature avoids greedy-decoding repetition loops
         // that can leave a field's string unterminated.
