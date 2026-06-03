@@ -53,6 +53,7 @@ describe('App.vue — RONY-14 Scan now', () => {
         id: 1,
         messageId: 'm',
         date: '2026-05-01',
+        dateSource: 'document',
         vendor: 'Acme',
         amount: 50,
         currency: 'ILS',

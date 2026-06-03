@@ -10,6 +10,7 @@ function inv(over: Partial<Invoice>): Invoice {
     id: 1,
     messageId: null,
     date: '2026-01-01',
+    dateSource: 'email',
     vendor: 'Acme',
     amount: 100,
     currency: 'ILS',
@@ -174,5 +175,21 @@ describe('InvoicesTable.vue', () => {
     await flushPromises()
     expect(deleteInvoice).not.toHaveBeenCalled()
     expect(wrapper.emitted('deleted')).toBeUndefined()
+  })
+
+  it('shows a date-provenance tooltip per row (document vs email)', () => {
+    const wrapper = mount(InvoicesTable, {
+      props: {
+        invoices: [
+          inv({ id: 1, vendor: 'Doc', dateSource: 'document' }),
+          inv({ id: 2, vendor: 'Mail', dateSource: 'email' })
+        ]
+      }
+    })
+    const titles = wrapper
+      .findAll('tbody tr')
+      .map((tr) => tr.find('td span[title]').attributes('title'))
+    expect(titles).toContain('תאריך מהחשבונית')
+    expect(titles).toContain('תאריך קבלת המייל')
   })
 })

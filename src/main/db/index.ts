@@ -10,6 +10,7 @@ interface InvoiceRow {
   id: number
   message_id: string | null
   date: string | null
+  date_source: Invoice['dateSource']
   vendor: string | null
   amount: number | null
   currency: string | null
@@ -24,6 +25,7 @@ function rowToInvoice(row: InvoiceRow): Invoice {
     id: row.id,
     messageId: row.message_id,
     date: row.date,
+    dateSource: row.date_source ?? null,
     vendor: row.vendor,
     amount: row.amount,
     currency: row.currency,
@@ -52,6 +54,7 @@ export function initDatabase(): Database.Database {
       id              INTEGER PRIMARY KEY AUTOINCREMENT,
       message_id      TEXT,
       date            TEXT,
+      date_source     TEXT,
       vendor          TEXT,
       amount          REAL,
       currency        TEXT,
@@ -73,6 +76,13 @@ export function initDatabase(): Database.Database {
     );
   `)
 
+  // Migration: add date_source to databases created before it existed (the
+  // CREATE above only adds it to brand-new DBs). No-op once the column is there.
+  const columns = db.prepare(`PRAGMA table_info(invoices)`).all() as Array<{ name: string }>
+  if (!columns.some((c) => c.name === 'date_source')) {
+    db.exec(`ALTER TABLE invoices ADD COLUMN date_source TEXT`)
+  }
+
   console.log(`[db] SQLite ready at ${dbPath}`)
   return db
 }
@@ -84,8 +94,8 @@ function getDb(): Database.Database {
 
 export function insertInvoice(invoice: NewInvoice): Invoice {
   const stmt = getDb().prepare(`
-    INSERT INTO invoices (message_id, date, vendor, amount, currency, local_file_path, status, engine_type)
-    VALUES (@messageId, @date, @vendor, @amount, @currency, @localFilePath, @status, @engineType)
+    INSERT INTO invoices (message_id, date, date_source, vendor, amount, currency, local_file_path, status, engine_type)
+    VALUES (@messageId, @date, @dateSource, @vendor, @amount, @currency, @localFilePath, @status, @engineType)
   `)
   const info = stmt.run(invoice)
   return getInvoiceById(Number(info.lastInsertRowid))!
@@ -124,8 +134,8 @@ export function invoiceExistsByPath(localFilePath: string): boolean {
 export function tryInsertInvoice(invoice: NewInvoice): boolean {
   const info = getDb()
     .prepare(
-      `INSERT INTO invoices (message_id, date, vendor, amount, currency, local_file_path, status, engine_type)
-       VALUES (@messageId, @date, @vendor, @amount, @currency, @localFilePath, @status, @engineType)
+      `INSERT INTO invoices (message_id, date, date_source, vendor, amount, currency, local_file_path, status, engine_type)
+       VALUES (@messageId, @date, @dateSource, @vendor, @amount, @currency, @localFilePath, @status, @engineType)
        ON CONFLICT(local_file_path) DO NOTHING`
     )
     .run(invoice)
@@ -167,6 +177,7 @@ export function runStartupSelfTest(): void {
   const inserted = insertInvoice({
     messageId: `selftest-${Date.now()}`,
     date: new Date().toISOString().slice(0, 10),
+    dateSource: 'email',
     vendor: 'Self-Test Vendor',
     amount: 123.45,
     currency: 'ILS',

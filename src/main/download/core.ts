@@ -154,6 +154,9 @@ export async function downloadApproved(
         invoice: {
           messageId: email.id,
           date: extracted?.date ?? email.date,
+          // Record which source actually supplied the date so the UI can show
+          // accurate provenance — 'document' only when the AI extracted one.
+          dateSource: extracted?.date ? 'document' : 'email',
           vendor: extracted?.vendor ?? null,
           amount: extracted?.amount ?? null,
           currency: extracted?.currency ?? null,

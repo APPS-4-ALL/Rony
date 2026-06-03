@@ -9,6 +9,13 @@ export type EngineType = 'deterministic' | 'ai'
 /** Processing status of a located invoice/receipt. */
 export type InvoiceStatus = 'pending' | 'downloaded' | 'exported' | 'error'
 
+/**
+ * Where an invoice's stored date came from: the document itself (the AI read it
+ * off the invoice) or the email's received date (the fallback / deterministic).
+ * `null` for legacy rows recorded before this was tracked.
+ */
+export type DateSource = 'document' | 'email'
+
 /** A located invoice/receipt and its extracted metadata. */
 export interface Invoice {
   id: number
@@ -16,6 +23,8 @@ export interface Invoice {
   messageId: string | null
   /** Invoice/receipt date as ISO-8601 string (YYYY-MM-DD), if known. */
   date: string | null
+  /** Where `date` came from — the invoice document or the email. */
+  dateSource: DateSource | null
   vendor: string | null
   /** Amount in the document's currency, stored as a number. */
   amount: number | null
