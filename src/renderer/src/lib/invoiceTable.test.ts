@@ -35,8 +35,12 @@ describe('engineLabel', () => {
 })
 
 describe('formatAmount', () => {
-  it('formats amount with thousands separators and currency', () => {
-    expect(formatAmount(1234.5, 'ILS')).toBe('1,234.50 ILS')
+  it('formats amount with the currency symbol', () => {
+    expect(formatAmount(1234.5, 'ILS')).toBe('₪1,234.50')
+    expect(formatAmount(100, 'USD')).toBe('$100.00')
+  })
+  it('falls back to the code for a malformed currency', () => {
+    expect(formatAmount(50, 'US')).toBe('50.00 US')
   })
   it('omits currency when null and shows dash for null amount', () => {
     expect(formatAmount(99, null)).toBe('99.00')

@@ -15,10 +15,16 @@ loadDotenv({ quiet: true })
 /** Default provider when `AI_PROVIDER` is unset. */
 const DEFAULT_PROVIDER: AiProviderName = 'openai'
 
-/** Default model per provider; override via OPENAI_MODEL / GEMINI_MODEL. */
+/**
+ * Default model per provider; override via OPENAI_MODEL / GEMINI_MODEL.
+ * We default to the stronger tier (not the cheap "mini"/"flash" models): the AI
+ * engine reads invoice PDFs/images to extract the total amount, and the larger
+ * models are noticeably better at that document reading. Users who prefer
+ * cheaper/faster runs can downgrade via the env override.
+ */
 const DEFAULT_MODELS: Record<AiProviderName, string> = {
-  openai: 'gpt-4o-mini',
-  gemini: 'gemini-2.5-flash'
+  openai: 'gpt-4o',
+  gemini: 'gemini-2.5-pro'
 }
 
 /** Resolve which provider to use (explicit arg > env > default). */

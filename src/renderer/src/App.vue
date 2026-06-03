@@ -4,6 +4,7 @@ import type { Invoice, ScanOptions, ScanProgress, ScanResult } from '@shared/typ
 import InvoicesTable from './components/InvoicesTable.vue'
 import SettingsView from './components/SettingsView.vue'
 import { progressLabel } from './lib/scanControls'
+import logoUrl from './assets/logo.png'
 
 type View = 'dashboard' | 'settings'
 const view = ref<View>('dashboard')
@@ -79,11 +80,11 @@ onUnmounted(() => unsubscribeProgress?.())
       <!-- Header -->
       <header class="mb-10">
         <div class="flex items-center gap-3">
-          <div
-            class="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-600 text-2xl font-black text-slate-950 shadow-lg shadow-emerald-500/20"
-          >
-            ר
-          </div>
+          <img
+            :src="logoUrl"
+            alt="רוני"
+            class="h-12 w-12 rounded-2xl object-cover shadow-lg shadow-emerald-500/20"
+          />
           <div>
             <p class="text-lg font-bold leading-none text-slate-100">רוני</p>
             <p class="mt-1 text-xs font-medium tracking-wide text-emerald-400">
