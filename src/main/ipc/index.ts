@@ -68,7 +68,12 @@ export function registerIpcHandlers(): void {
   //
   // SECURITY: like openFile, the renderer sends only the ID. We look up the
   // path ourselves and only unlink it when it resolves INSIDE an invoices folder
-  // we control — never an arbitrary path. The DB row is always removed.
+  // we control — never an arbitrary path.
+  //
+  // CONSISTENCY: we delete the FILE first and the row only if that succeeds (or
+  // the file was already gone). If the file is locked — usually because it's open
+  // in another program on Windows (EBUSY/EPERM) — we abort and keep the row, so
+  // the user never ends up with an orphaned file the app no longer tracks.
   // Returns '' on success, or a readable error.
   ipcMain.handle(IpcChannels.invoicesDelete, async (_e, invoiceId: number): Promise<string> => {
     if (typeof invoiceId !== 'number' || !Number.isInteger(invoiceId)) {
@@ -83,9 +88,15 @@ export function registerIpcHandlers(): void {
         try {
           await unlink(invoice.localFilePath)
         } catch (e) {
-          // Already gone is fine; log anything else but still drop the row.
-          if ((e as NodeJS.ErrnoException).code !== 'ENOENT') {
+          const code = (e as NodeJS.ErrnoException).code
+          // Anything but "already gone" means we could NOT remove the file →
+          // keep the row so file + DB stay consistent, and tell the user why.
+          if (code !== 'ENOENT') {
             console.error(`[delete] failed to remove file for invoice ${invoiceId}:`, e)
+            if (code === 'EBUSY' || code === 'EPERM') {
+              return 'לא ניתן למחוק — הקובץ כנראה פתוח בתוכנה אחרת. סגור/י אותו ונסה/י שוב.'
+            }
+            return `מחיקת הקובץ נכשלה: ${e instanceof Error ? e.message : String(e)}`
           }
         }
       } else {

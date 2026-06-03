@@ -73,25 +73,26 @@ function dateSourceTitle(source: Invoice['dateSource']): string {
   return ''
 }
 
-const openError = ref('')
+/** Inline error from an open/delete action (each sets its own full message). */
+const actionError = ref('')
 
 /** Open the invoice's local file via the OS (RONY-13 DoD button). We send only
  * the invoice id — the main process resolves + validates the path (security). */
 async function openFile(inv: Invoice): Promise<void> {
-  openError.value = ''
+  actionError.value = ''
   if (!inv.localFilePath) return
   const err = await window.api.invoices.openFile(inv.id)
-  if (err) openError.value = err
+  if (err) actionError.value = `לא ניתן לפתוח את הקובץ: ${err}`
 }
 
 /** Delete the invoice (row + its file). Confirms first — it removes the file. */
 async function removeInvoice(inv: Invoice): Promise<void> {
-  openError.value = ''
+  actionError.value = ''
   const name = inv.vendor ?? 'חשבונית זו'
   if (!window.confirm(`למחוק את "${name}"? הפעולה תמחק גם את הקובץ מהמחשב ואינה הפיכה.`)) return
   const err = await window.api.invoices.delete(inv.id)
   if (err) {
-    openError.value = err
+    actionError.value = err
     return
   }
   emit('deleted')
@@ -264,8 +265,8 @@ async function exportCsv(): Promise<void> {
       </tbody>
     </table>
 
-    <p v-if="openError" class="mt-4 rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">
-      לא ניתן לפתוח את הקובץ: {{ openError }}
+    <p v-if="actionError" class="mt-4 rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">
+      {{ actionError }}
     </p>
     <p v-if="exportNote" class="mt-4 rounded-lg bg-slate-800/60 px-3 py-2 text-sm text-slate-300">
       {{ exportNote }}

@@ -177,6 +177,17 @@ describe('InvoicesTable.vue', () => {
     expect(wrapper.emitted('deleted')).toBeUndefined()
   })
 
+  it('shows the error and does not emit when delete fails (e.g. file locked)', async () => {
+    deleteInvoice.mockResolvedValue(
+      'לא ניתן למחוק — הקובץ כנראה פתוח בתוכנה אחרת. סגור/י אותו ונסה/י שוב.'
+    )
+    const wrapper = mount(InvoicesTable, { props: { invoices: [inv({ id: 7 })] } })
+    await wrapper.find('button[aria-label="מחיקה"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.emitted('deleted')).toBeUndefined()
+    expect(wrapper.text()).toContain('הקובץ כנראה פתוח בתוכנה אחרת')
+  })
+
   it('shows a date-provenance tooltip per row (document vs email)', () => {
     const wrapper = mount(InvoicesTable, {
       props: {
