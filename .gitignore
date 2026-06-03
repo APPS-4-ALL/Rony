@@ -6,3 +6,6 @@ out
 *.log*
 .env
 .env.local
+
+# Local CSV exports produced by the app (RONY-15) — user data, never committed.
+invoices-*.csv

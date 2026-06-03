@@ -8,6 +8,19 @@
 /** The supported external LLM providers. */
 export type AiProviderName = 'openai' | 'gemini'
 
+/**
+ * One attachment's bytes, handed to a vision-capable model so it can read
+ * fields (notably the TOTAL amount) that live inside the document rather than
+ * in the email text. `mimeType` selects how the provider frames it
+ * (`application/pdf` vs `image/*`).
+ */
+export interface AiAttachment {
+  filename: string
+  mimeType: string
+  /** Raw file bytes (decoded from Gmail's base64url). */
+  data: Buffer
+}
+
 /** The email content handed to the engine for classification/extraction. */
 export interface AiInput {
   subject: string
@@ -16,6 +29,12 @@ export interface AiInput {
   from?: string
   /** Attachment file names, e.g. ["invoice_2026.pdf"]. */
   filenames?: string[]
+  /**
+   * Attachment bytes for vision models (RONY-10 "טקסט מחולץ"). When present, the
+   * provider sends the file alongside the prompt so the model can read the
+   * amount from the document itself. Omitted → text-only classification.
+   */
+  attachments?: AiAttachment[]
 }
 
 /**
@@ -64,9 +83,14 @@ export interface ProviderConfig {
  * A provider adapter: given the system + user prompt, performs the HTTP call
  * and returns the model's raw text output (expected to be a JSON string).
  * Parsing/normalization happens centrally so all providers behave identically.
+ *
+ * When `attachments` are given, the adapter must send them to a vision-capable
+ * model (Gemini `inlineData`, OpenAI Responses `input_file`/`input_image`) so
+ * the model can read fields out of the document.
  */
 export type ProviderComplete = (args: {
   system: string
   user: string
   cfg: ProviderConfig
+  attachments?: AiAttachment[]
 }) => Promise<string>
