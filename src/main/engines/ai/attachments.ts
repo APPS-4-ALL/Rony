@@ -17,10 +17,44 @@ import type { GmailAttachmentRef } from '../../gmail/parse'
  */
 export const MAX_VISION_BYTES = 15 * 1024 * 1024
 
-/** True when a MIME type is something our vision adapters can send. */
-export function isVisionSupported(mimeType: string): boolean {
-  const mime = mimeType.toLowerCase()
-  return mime === 'application/pdf' || mime.startsWith('image/')
+/**
+ * Extension → canonical MIME, used to recover the real type when a sender
+ * mislabels the part (e.g. a PDF attached as `application/octet-stream`, which
+ * many ERP/receipt systems do). Mirrors the extensions the RONY-7 download
+ * filter accepts, so anything we save to disk we can also send to the model.
+ */
+const EXT_MIME: Record<string, string> = {
+  pdf: 'application/pdf',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  heic: 'image/heic',
+  heif: 'image/heif',
+  bmp: 'image/bmp',
+  tif: 'image/tiff',
+  tiff: 'image/tiff'
+}
+
+/**
+ * The MIME type to send a vision model for this attachment, or `null` when it
+ * isn't a PDF/image we can read. A real PDF/image MIME is trusted as-is;
+ * otherwise we fall back to the filename extension — a real PDF mislabeled as
+ * `application/octet-stream` must still be sent with a correct type or the
+ * model can't read it. (This is why downloaded files were silently skipped by
+ * the vision pass before.)
+ */
+export function visionMimeType(att: GmailAttachmentRef): string | null {
+  const mime = att.mimeType.toLowerCase()
+  if (mime === 'application/pdf' || mime.startsWith('image/')) return mime
+  const ext = att.filename.toLowerCase().split('.').pop() ?? ''
+  return EXT_MIME[ext] ?? null
+}
+
+/** True when an attachment is a PDF/image our vision adapters can send. */
+export function isVisionSupported(att: GmailAttachmentRef): boolean {
+  return visionMimeType(att) !== null
 }
 
 /**
@@ -28,8 +62,8 @@ export function isVisionSupported(mimeType: string): boolean {
  * none is usable. Preference order:
  *   1. the first PDF (invoices are overwhelmingly PDFs);
  *   2. otherwise the largest image (a scan/photo of the receipt).
- * Only candidates with a downloadable `attachmentId`, a vision-supported type,
- * and a size within `MAX_VISION_BYTES` are considered.
+ * Only candidates with a downloadable `attachmentId`, a vision-supported type
+ * (by MIME or extension), and a size within `MAX_VISION_BYTES` are considered.
  */
 export function pickInvoiceAttachment(
   attachments: GmailAttachmentRef[]
@@ -37,12 +71,12 @@ export function pickInvoiceAttachment(
   const usable = attachments.filter(
     (a) =>
       a.attachmentId !== null &&
-      isVisionSupported(a.mimeType) &&
+      isVisionSupported(a) &&
       (a.size === 0 || a.size <= MAX_VISION_BYTES)
   )
   if (usable.length === 0) return null
 
-  const pdf = usable.find((a) => a.mimeType.toLowerCase() === 'application/pdf')
+  const pdf = usable.find((a) => visionMimeType(a) === 'application/pdf')
   if (pdf) return pdf
 
   return usable.reduce((largest, a) => (a.size > largest.size ? a : largest))

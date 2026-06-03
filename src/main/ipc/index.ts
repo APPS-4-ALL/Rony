@@ -19,7 +19,7 @@ import { isPathInsideDir } from '../lib/pathSafety'
 import { selectApproved } from '../scan/classify'
 import { classifyWithAI } from '../engines/ai'
 import type { AiAttachment } from '../engines/ai/types'
-import { pickInvoiceAttachment } from '../engines/ai/attachments'
+import { pickInvoiceAttachment, visionMimeType } from '../engines/ai/attachments'
 import { getProviderConfig } from '../engines/ai/config'
 import { getSettings, updateSettings } from '../settings'
 import { clearApiKey, getApiKey, hasApiKey, setApiKey } from '../settings/apiKeyStore'
@@ -177,7 +177,9 @@ export function registerIpcHandlers(): void {
       if (!chosen?.attachmentId) return undefined
       try {
         const data = await fetchAttachmentData(client, email.id, chosen.attachmentId)
-        return [{ filename: chosen.filename, mimeType: chosen.mimeType, data }]
+        // Send the corrected MIME (a sender may mislabel a PDF as octet-stream).
+        const mimeType = visionMimeType(chosen) ?? chosen.mimeType
+        return [{ filename: chosen.filename, mimeType, data }]
       } catch (e) {
         console.error(`[scan] vision attachment fetch failed for ${email.id} (text-only):`, e)
         return undefined
