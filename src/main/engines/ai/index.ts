@@ -14,7 +14,7 @@ import { getModel, getProviderConfig, resolveProvider } from './config'
 import { AI_SYSTEM_PROMPT, buildUserPrompt } from './prompt'
 import { completeOpenAI } from './providers/openai'
 import { completeGemini } from './providers/gemini'
-import type { AiInput, AiProviderName, AiResult, ProviderComplete, ProviderConfig } from './types'
+import type { AiAttachment, AiInput, AiProviderName, AiResult, ProviderComplete } from './types'
 
 const PROVIDERS: Record<AiProviderName, ProviderComplete> = {
   openai: completeOpenAI,
@@ -30,10 +30,62 @@ export interface ClassifyOptions {
    * env override or the provider default.
    */
   apiKey?: string
+  /**
+   * Lazily fetch the document bytes. Called ONLY when the fast text pass decides
+   * it needs the document (see `shouldEscalate`), so we never download an
+   * attachment we won't use. If omitted, `input.attachments` is used instead.
+   */
+  loadAttachments?: () => Promise<AiAttachment[] | undefined>
 }
 
 /**
- * Classify one email as financial-or-not and extract its fields via an LLM.
+ * Decide whether the cheap text-only pass needs to escalate to the strong,
+ * document-reading model. Pure + exported for unit testing. We escalate when:
+ *  - the model explicitly asked for the document (`needsDocument`), OR
+ *  - it judged the email financial but couldn't find the total `amount` (the
+ *    amount almost always lives inside the attachment in that case).
+ */
+export function shouldEscalate(tier1: AiResult): boolean {
+  return tier1.needsDocument === true || (tier1.isFinancial && tier1.amount === null)
+}
+
+/**
+ * Two-tier classification (RONY-10): run the FAST model text-only first; only if
+ * that pass can't finish the job (and a document is available) re-run on the
+ * STRONG model with the attachment. `complete` is injected so this orchestration
+ * is unit-testable without network. Returns the strong-pass result when we
+ * escalate, else the fast-pass result.
+ */
+export async function classifyTiered(args: {
+  complete: ProviderComplete
+  system: string
+  user: string
+  apiKey: string
+  fastModel: string
+  strongModel: string
+  loadAttachments?: () => Promise<AiAttachment[] | undefined>
+}): Promise<AiResult> {
+  const { complete, system, user, apiKey, fastModel, strongModel, loadAttachments } = args
+
+  // Tier 1: fast model, text only.
+  const tier1 = normalizeAiResult(
+    await complete({ system, user, cfg: { apiKey, model: fastModel } })
+  )
+  if (!shouldEscalate(tier1)) return tier1
+
+  // Tier 2: only if a document is actually available do we pay for the strong
+  // model + vision; otherwise the fast result is the best we have.
+  const attachments = await loadAttachments?.()
+  if (!attachments || attachments.length === 0) return tier1
+
+  return normalizeAiResult(
+    await complete({ system, user, cfg: { apiKey, model: strongModel }, attachments })
+  )
+}
+
+/**
+ * Classify one email as financial-or-not and extract its fields via an LLM,
+ * using the two-tier fast→strong strategy above.
  * Throws a readable error if the provider/key is unconfigured or the call fails.
  */
 export async function classifyWithAI(
@@ -41,19 +93,23 @@ export async function classifyWithAI(
   options: ClassifyOptions = {}
 ): Promise<AiResult> {
   const provider = resolveProvider(options.provider)
-  const cfg: ProviderConfig = options.apiKey
-    ? { apiKey: options.apiKey, model: getModel(provider) }
-    : getProviderConfig(provider)
-  const complete = PROVIDERS[provider]
+  // Resolve the key: explicit (user's stored key — RONY-16) wins; otherwise the
+  // env-based dev fallback, which throws a helpful error when absent.
+  const apiKey = options.apiKey ?? getProviderConfig(provider).apiKey
+  const inputAttachments = input.attachments
+  const loadAttachments =
+    options.loadAttachments ??
+    (inputAttachments ? async (): Promise<AiAttachment[]> => inputAttachments : undefined)
 
-  const raw = await complete({
+  return classifyTiered({
+    complete: PROVIDERS[provider],
     system: AI_SYSTEM_PROMPT,
     user: buildUserPrompt(input),
-    cfg,
-    attachments: input.attachments
+    apiKey,
+    fastModel: getModel(provider, 'fast'),
+    strongModel: getModel(provider, 'strong'),
+    loadAttachments
   })
-
-  return normalizeAiResult(raw)
 }
 
 /* ----------------------------- normalization ----------------------------- */
@@ -125,6 +181,7 @@ export function normalizeAiResult(raw: string): AiResult {
     isFinancial: obj.isFinancial === true,
     confidenceScore: toConfidence(obj.confidenceScore),
     ...(reasoning ? { reasoning } : {}),
+    ...(obj.needsDocument === true ? { needsDocument: true } : {}),
     vendor: toStringOrNull(obj.vendor),
     amount: toAmountOrNull(obj.amount),
     currency: toStringOrNull(obj.currency),

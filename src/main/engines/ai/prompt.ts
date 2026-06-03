@@ -22,6 +22,7 @@ text) with EXACTLY these keys, in this order:
   "reasoning": string,        // 1-2 short sentences justifying your decision
   "isFinancial": boolean,     // true only for actual invoices/receipts/bills
   "confidenceScore": number,  // your confidence 0..1
+  "needsDocument": boolean,   // see the escalation rule below
   "vendor": string|null,      // the issuing business name, or null
   "amount": number|null,      // TOTAL amount as a RAW float, e.g. 1000.5
   "currency": string|null,    // ISO-4217 code, e.g. "ILS","USD", or null
@@ -33,6 +34,13 @@ Rules:
   READ IT — the total amount in particular is usually printed on the document
   itself and is often absent from the email text. Prefer the document's figures
   over the email body when they disagree.
+- needsDocument (ESCALATION): if a document is ALREADY attached to this request,
+  set it false — you can see the document, so read it. If NO document is attached
+  but the "Attachments" line lists a PDF/image AND you cannot confidently
+  determine the fields from the email text alone (most often the TOTAL amount is
+  missing, or you are unsure whether this is even a financial document), set it
+  true to ask for the document on a second pass. If the email text already gives
+  you everything, set it false.
 - Read the ENTIRE email body before deciding — the relevant details (totals,
   dates, vendor) are often further down, especially in long reply threads.
 - "amount" MUST be a plain number: strip currency symbols (₪, $), thousands

@@ -16,15 +16,23 @@ loadDotenv({ quiet: true })
 const DEFAULT_PROVIDER: AiProviderName = 'openai'
 
 /**
- * Default model per provider; override via OPENAI_MODEL / GEMINI_MODEL.
- * We default to the stronger tier (not the cheap "mini"/"flash" models): the AI
- * engine reads invoice PDFs/images to extract the total amount, and the larger
- * models are noticeably better at that document reading. Users who prefer
- * cheaper/faster runs can downgrade via the env override.
+ * Two model tiers per provider (RONY-10 tiered scan):
+ *  - `fast`: the cheap/quick model. Every email goes here FIRST, text-only, to
+ *    classify and try to extract the fields from the email itself.
+ *  - `strong`: the larger, document-reading model. We escalate to it (with the
+ *    PDF/image attached) ONLY when the fast pass can't finish the job — e.g. the
+ *    total amount lives inside the attachment. This keeps the expensive
+ *    vision/reasoning calls to the minority of emails that actually need them.
+ *
+ * Overridable per tier via OPENAI_MODEL_FAST/OPENAI_MODEL_STRONG (and the GEMINI
+ * equivalents). The legacy OPENAI_MODEL / GEMINI_MODEL still overrides `strong`,
+ * preserving older `.env` files.
  */
-const DEFAULT_MODELS: Record<AiProviderName, string> = {
-  openai: 'gpt-4o',
-  gemini: 'gemini-2.5-pro'
+export type ModelTier = 'fast' | 'strong'
+
+const DEFAULT_MODELS: Record<ModelTier, Record<AiProviderName, string>> = {
+  fast: { openai: 'gpt-4o-mini', gemini: 'gemini-2.5-flash' },
+  strong: { openai: 'gpt-4o', gemini: 'gemini-2.5-pro' }
 }
 
 /** Resolve which provider to use (explicit arg > env > default). */
@@ -34,10 +42,13 @@ export function resolveProvider(explicit?: AiProviderName): AiProviderName {
   throw new Error(`Unsupported AI_PROVIDER "${raw}" — use "openai" or "gemini".`)
 }
 
-/** Resolve the model for a provider (env override or default). */
-export function getModel(provider: AiProviderName): string {
-  const modelEnv = provider === 'openai' ? 'OPENAI_MODEL' : 'GEMINI_MODEL'
-  return process.env[modelEnv]?.trim() || DEFAULT_MODELS[provider]
+/** Resolve the model for a provider + tier (env override or default). */
+export function getModel(provider: AiProviderName, tier: ModelTier = 'strong'): string {
+  const prefix = provider === 'openai' ? 'OPENAI' : 'GEMINI'
+  const tierEnv = process.env[`${prefix}_MODEL_${tier.toUpperCase()}`]?.trim()
+  // Legacy single-model override still applies to the strong tier.
+  const legacyEnv = tier === 'strong' ? process.env[`${prefix}_MODEL`]?.trim() : undefined
+  return tierEnv || legacyEnv || DEFAULT_MODELS[tier][provider]
 }
 
 /**
