@@ -49,8 +49,8 @@ describe('formatAmount', () => {
 })
 
 describe('formatDate', () => {
-  it('passes through an ISO date and dashes a missing one', () => {
-    expect(formatDate('2026-05-20')).toBe('2026-05-20')
+  it('formats an ISO date as DD/MM/YYYY and dashes a missing one', () => {
+    expect(formatDate('2026-05-20')).toBe('20/05/2026')
     expect(formatDate(null)).toBe('—')
     expect(formatDate('')).toBe('—')
   })

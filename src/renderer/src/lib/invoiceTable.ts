@@ -43,9 +43,16 @@ export function formatAmount(amount: number | null, currency: string | null): st
   return currency ? `${num} ${currency}` : num
 }
 
-/** Show an ISO date as-is (already `YYYY-MM-DD`), or `—` when unknown. */
+/**
+ * Show a date as `DD/MM/YYYY` (from the stored ISO `YYYY-MM-DD`), or `—` when
+ * unknown. Anything that isn't an ISO date is shown unchanged.
+ */
 export function formatDate(date: string | null): string {
-  return date && date.trim() ? date : '—'
+  if (!date || !date.trim()) return '—'
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(date.trim())
+  if (!m) return date
+  const [, year, month, day] = m
+  return `${day}/${month}/${year}`
 }
 
 /**
