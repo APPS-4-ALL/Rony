@@ -12,7 +12,9 @@ function createWindow(): void {
     height: 670,
     show: false,
     autoHideMenuBar: true,
-    ...(process.platform === 'linux' ? { icon } : {}),
+    // Use our app icon for the window + taskbar (macOS uses the packaged
+    // bundle icon, so the BrowserWindow option there is harmless).
+    icon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false

@@ -16,9 +16,26 @@ export function engineLabel(engine: EngineType): string {
   return engine === 'ai' ? 'AI' : 'Deterministic'
 }
 
-/** Format an amount + currency for display, e.g. `1,234.50 ILS`, or `—`. */
+/**
+ * Format an amount + currency for display using the currency *symbol*
+ * (₪, $, €…), e.g. `₪1,234.50`. Falls back to `<number> <code>` for an unknown
+ * currency, the plain number when no currency, or `—` when there's no amount.
+ */
 export function formatAmount(amount: number | null, currency: string | null): string {
   if (amount == null) return '—'
+  if (currency) {
+    try {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency,
+        currencyDisplay: 'narrowSymbol',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      }).format(amount)
+    } catch {
+      // Unknown/invalid currency code → fall through to the plain number + code.
+    }
+  }
   const num = amount.toLocaleString('en-US', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
