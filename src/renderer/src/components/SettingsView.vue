@@ -1,17 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import type { AiProvider, AuthStatus, EngineType, Locale, Settings } from '@shared/types'
+import type { AiProvider, AuthStatus, EngineType, Settings } from '@shared/types'
 import { connectionDisplay, ENGINE_OPTIONS, PROVIDER_OPTIONS } from '../lib/settingsView'
-import { useI18n } from '../lib/useI18n'
-import { LOCALE_OPTIONS } from '../lib/i18n'
-
-const { t, locale, setLocale } = useI18n()
 
 const status = ref<AuthStatus>({ connected: false, email: null })
 const settings = ref<Settings>({
   defaultEngine: 'deterministic',
-  aiProvider: 'openai',
-  locale: 'he'
+  aiProvider: 'openai'
 })
 const busy = ref(false)
 const error = ref('')
@@ -26,6 +21,18 @@ const providerLabel = computed(
   () => PROVIDER_OPTIONS.find((p) => p.value === settings.value.aiProvider)?.label ?? ''
 )
 
+/** Hebrew label for an engine option. */
+function engineLabel(v: EngineType): string {
+  return v === 'ai' ? 'בינה מלאכותית (מתקדם)' : 'דטרמיניסטי'
+}
+
+/** Hebrew description for an engine option. */
+function engineDesc(v: EngineType): string {
+  return v === 'ai'
+    ? 'שולח את טקסט המייל למודל שפה לצורך סיווג וחילוץ שדות. דורש מפתח API.'
+    : 'התאמת מילות מפתח/Regex מקומית ומהירה. ללא מפתח API — עובד לחלוטין במצב לא מקוון.'
+}
+
 async function refreshKeyStatus(): Promise<void> {
   apiKeySet.value = await window.api.settings.hasApiKey(settings.value.aiProvider)
 }
@@ -33,7 +40,6 @@ async function refreshKeyStatus(): Promise<void> {
 async function load(): Promise<void> {
   status.value = await window.api.auth.status()
   settings.value = await window.api.settings.get()
-  setLocale(settings.value.locale)
   await refreshKeyStatus()
 }
 
@@ -72,12 +78,6 @@ const selectProvider = (provider: AiProvider): Promise<void> =>
     await refreshKeyStatus()
   })
 
-const selectLocale = (next: Locale): Promise<void> =>
-  guarded(async () => {
-    settings.value = await window.api.settings.set({ locale: next })
-    setLocale(next)
-  })
-
 const saveApiKey = (): Promise<void> =>
   guarded(async () => {
     const key = apiKeyInput.value.trim()
@@ -100,23 +100,17 @@ onMounted(() => guarded(load))
   <div class="space-y-6">
     <!-- Gmail connection -->
     <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
-      <h2 class="text-lg font-semibold">{{ t('settings.gmail.title') }}</h2>
+      <h2 class="text-lg font-semibold">חיבור ל-Gmail</h2>
 
       <div class="mt-4 flex flex-wrap items-center justify-between gap-4">
         <div class="flex items-center gap-3">
           <span class="inline-block h-2.5 w-2.5 rounded-full" :class="conn.badgeColor" />
           <div>
             <p class="font-medium" :class="conn.textColor">
-              {{
-                conn.connected ? t('settings.gmail.connected') : t('settings.gmail.disconnected')
-              }}
+              {{ conn.connected ? 'מחובר' : 'מנותק' }}
             </p>
             <p class="text-sm text-slate-400">
-              {{
-                conn.connected
-                  ? (status.email ?? t('settings.gmail.account'))
-                  : t('settings.gmail.notConnected')
-              }}
+              {{ conn.connected ? (status.email ?? 'חשבון Gmail') : 'לא מחובר ל-Gmail' }}
             </p>
           </div>
         </div>
@@ -127,7 +121,7 @@ onMounted(() => guarded(load))
           :disabled="busy"
           @click="onLogout"
         >
-          {{ t('settings.gmail.disconnect') }}
+          התנתקות
         </button>
         <button
           v-else
@@ -135,42 +129,21 @@ onMounted(() => guarded(load))
           :disabled="busy"
           @click="onLogin"
         >
-          {{ busy ? t('settings.gmail.connecting') : t('settings.gmail.connect') }}
+          {{ busy ? 'מתחבר…' : 'התחברות ל-Gmail' }}
         </button>
       </div>
 
       <p v-if="!conn.connected && busy" class="mt-3 text-sm text-slate-400">
-        {{ t('settings.gmail.browserHint') }}
+        נפתח חלון דפדפן — אשר/י שם את הגישה כדי להשלים את ההתחברות.
       </p>
-    </section>
-
-    <!-- Language -->
-    <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
-      <h2 class="text-lg font-semibold">{{ t('settings.lang.title') }}</h2>
-      <p class="mt-1 text-sm text-slate-400">{{ t('settings.lang.desc') }}</p>
-
-      <div class="mt-4 flex gap-2">
-        <button
-          v-for="opt in LOCALE_OPTIONS"
-          :key="opt.value"
-          class="rounded-lg border px-3 py-1.5 text-sm font-medium transition disabled:opacity-50"
-          :class="
-            locale === opt.value
-              ? 'border-emerald-500 bg-emerald-500/10 text-emerald-200'
-              : 'border-slate-700 text-slate-300 hover:border-slate-500'
-          "
-          :disabled="busy"
-          @click="selectLocale(opt.value)"
-        >
-          {{ opt.label }}
-        </button>
-      </div>
     </section>
 
     <!-- Default scan engine -->
     <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
-      <h2 class="text-lg font-semibold">{{ t('settings.engine.title') }}</h2>
-      <p class="mt-1 text-sm text-slate-400">{{ t('settings.engine.desc') }}</p>
+      <h2 class="text-lg font-semibold">מנוע סריקה כברירת מחדל</h2>
+      <p class="mt-1 text-sm text-slate-400">
+        איזה מנוע ירוץ כברירת מחדל כשתסרוק. ניתן לשנות זאת בכל עת.
+      </p>
 
       <div class="mt-4 grid gap-3 sm:grid-cols-2">
         <button
@@ -186,27 +159,24 @@ onMounted(() => guarded(load))
           @click="selectEngine(opt.value)"
         >
           <div class="flex items-center justify-between">
-            <span class="font-medium text-slate-100">{{
-              t(`settings.engine.${opt.value}.label`)
-            }}</span>
+            <span class="font-medium text-slate-100">{{ engineLabel(opt.value) }}</span>
             <span
               v-if="settings.defaultEngine === opt.value"
               class="text-xs font-semibold text-emerald-400"
-              >{{ t('settings.engine.selected') }}</span
+              >נבחר</span
             >
           </div>
-          <p class="mt-1 text-sm text-slate-400">{{ t(`settings.engine.${opt.value}.desc`) }}</p>
+          <p class="mt-1 text-sm text-slate-400">{{ engineDesc(opt.value) }}</p>
         </button>
       </div>
     </section>
 
     <!-- AI provider + API key (RONY-16) — only when the AI engine is selected -->
     <section v-if="showAi" class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
-      <h2 class="text-lg font-semibold">{{ t('settings.ai.title') }}</h2>
+      <h2 class="text-lg font-semibold">ספק בינה מלאכותית ומפתח API</h2>
       <p class="mt-1 text-sm text-slate-400">
-        {{ t('settings.ai.desc1')
-        }}<span class="text-slate-200">{{ t('settings.ai.descEmph') }}</span
-        >{{ t('settings.ai.desc2') }}
+        מנוע ה-AI שולח את טקסט המייל לספק שבחרת. המפתח שלך נשמר
+        <span class="text-slate-200">מוצפן על המחשב הזה</span> ולא עוזב אותו, פרט לקריאה לספק.
       </p>
 
       <!-- Provider -->
@@ -228,17 +198,13 @@ onMounted(() => guarded(load))
       </div>
 
       <!-- Key -->
-      <label class="mt-4 block text-sm text-slate-400">{{
-        t('settings.ai.keyLabel', { provider: providerLabel })
-      }}</label>
+      <label class="mt-4 block text-sm text-slate-400">מפתח API של {{ providerLabel }}</label>
       <div class="mt-1 flex flex-wrap items-center gap-2">
         <input
           v-model="apiKeyInput"
           type="password"
           autocomplete="off"
-          :placeholder="
-            apiKeySet ? t('settings.ai.placeholderSet') : t('settings.ai.placeholderEmpty')
-          "
+          :placeholder="apiKeySet ? '•••••••• (מפתח שמור)' : 'הדבק/י את מפתח ה-API'"
           class="w-72 rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:outline-none"
         />
         <button
@@ -246,7 +212,7 @@ onMounted(() => guarded(load))
           :disabled="busy || !apiKeyInput.trim()"
           @click="saveApiKey"
         >
-          {{ t('settings.ai.save') }}
+          שמירה
         </button>
         <button
           v-if="apiKeySet"
@@ -254,14 +220,14 @@ onMounted(() => guarded(load))
           :disabled="busy"
           @click="clearKey"
         >
-          {{ t('settings.ai.clear') }}
+          מחיקה
         </button>
       </div>
       <p class="mt-2 text-sm" :class="apiKeySet ? 'text-emerald-400' : 'text-slate-500'">
         {{
           apiKeySet
-            ? t('settings.ai.stored', { provider: providerLabel })
-            : t('settings.ai.notStored')
+            ? `✓ מפתח שמור באופן מאובטח עבור ${providerLabel}.`
+            : 'אין עדיין מפתח שמור — מנוע ה-AI זקוק לאחד כדי לפעול.'
         }}
       </p>
     </section>

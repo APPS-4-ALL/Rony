@@ -3,18 +3,16 @@ import { onMounted, onUnmounted, ref } from 'vue'
 import type { Invoice, ScanOptions, ScanProgress, ScanResult } from '@shared/types'
 import InvoicesTable from './components/InvoicesTable.vue'
 import SettingsView from './components/SettingsView.vue'
-import { useI18n } from './lib/useI18n'
 import { progressLabel } from './lib/scanControls'
-
-const { t, locale, setLocale } = useI18n()
-
-/** Flip between the two languages from the header toggle. */
-function toggleLocale(): void {
-  setLocale(locale.value === 'he' ? 'en' : 'he')
-}
 
 type View = 'dashboard' | 'settings'
 const view = ref<View>('dashboard')
+
+/** Top-level tabs (Hebrew labels). */
+const tabs = [
+  { key: 'dashboard', label: 'לוח בקרה' },
+  { key: 'settings', label: 'הגדרות' }
+] as const
 
 const pingResult = ref<string>('')
 const invoices = ref<Invoice[]>([])
@@ -93,16 +91,12 @@ const onAddSample = (): Promise<void> =>
   })
 
 let unsubscribeProgress: (() => void) | null = null
-/** Subscribe to live progress, apply the persisted language, then load the table. */
+/** Subscribe to live progress, then load the table. */
 onMounted(() => {
   unsubscribeProgress = window.api.scan.onProgress((p) => {
     scanProgress.value = p
   })
-  void withGuard(async () => {
-    const settings = await window.api.settings.get()
-    setLocale(settings.locale)
-    await refresh()
-  })
+  void withGuard(refresh)
 })
 onUnmounted(() => unsubscribeProgress?.())
 </script>
@@ -112,36 +106,29 @@ onUnmounted(() => unsubscribeProgress?.())
     <div class="mx-auto max-w-3xl px-6 py-10">
       <!-- Header -->
       <header class="mb-8">
-        <div class="flex items-start justify-between gap-4">
-          <p class="text-sm font-semibold uppercase tracking-widest text-emerald-400">
-            {{ t('app.tagline') }}
-          </p>
-          <button
-            class="rounded-lg border border-slate-700 px-3 py-1 text-xs font-semibold text-slate-300 transition hover:border-emerald-500 hover:text-emerald-300"
-            :title="locale === 'he' ? 'Switch to English' : 'מעבר לעברית'"
-            @click="toggleLocale"
-          >
-            {{ locale === 'he' ? 'English' : 'עברית' }}
-          </button>
-        </div>
-        <h1 class="mt-1 text-3xl font-bold">{{ t('app.title') }}</h1>
-        <p class="mt-2 text-slate-400">{{ t('app.subtitle') }}</p>
+        <p class="text-sm font-semibold uppercase tracking-widest text-emerald-400">
+          רוני · מבוסס-מקומי
+        </p>
+        <h1 class="mt-1 text-3xl font-bold">סורק חשבוניות וקבלות</h1>
+        <p class="mt-2 text-slate-400">
+          סורק את ה-Gmail שלך לאיתור חשבוניות וקבלות, מוריד אותן למחשב ומרכז את כולן בלוח בקרה אחד.
+        </p>
       </header>
 
       <!-- View tabs (RONY-12) -->
       <nav class="mb-8 flex gap-1 border-b border-slate-800">
         <button
-          v-for="tab in ['dashboard', 'settings'] as const"
-          :key="tab"
+          v-for="tab in tabs"
+          :key="tab.key"
           class="-mb-px border-b-2 px-4 py-2 text-sm font-medium transition"
           :class="
-            view === tab
+            view === tab.key
               ? 'border-emerald-400 text-emerald-300'
               : 'border-transparent text-slate-400 hover:text-slate-200'
           "
-          @click="view = tab"
+          @click="view = tab.key"
         >
-          {{ t(`nav.${tab}`) }}
+          {{ tab.label }}
         </button>
       </nav>
 
@@ -163,8 +150,11 @@ onUnmounted(() => unsubscribeProgress?.())
 
         <!-- Backend self-check: exercises IPC (RONY-4) + SQLite (RONY-3) -->
         <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
-          <h2 class="text-lg font-semibold">{{ t('backend.title') }}</h2>
-          <p class="mt-1 text-sm text-slate-400">{{ t('backend.desc') }}</p>
+          <h2 class="text-lg font-semibold">תקשורת עם השרת</h2>
+          <p class="mt-1 text-sm text-slate-400">
+            הכפתורים האלה קוראים לתהליך הראשי של Electron דרך גשר IPC מאובטח, שקורא וכותב למסד
+            הנתונים המקומי (SQLite).
+          </p>
 
           <div class="mt-4 flex flex-wrap items-center gap-3">
             <button
@@ -172,10 +162,10 @@ onUnmounted(() => unsubscribeProgress?.())
               :disabled="busy"
               @click="onPing"
             >
-              {{ t('backend.ping') }}
+              בדיקת תקשורת
             </button>
             <span v-if="pingResult" class="text-sm text-emerald-400">
-              {{ t('backend.replied') }} <code class="font-mono">{{ pingResult }}</code>
+              תשובת השרת: <code class="font-mono">{{ pingResult }}</code>
             </span>
           </div>
 
@@ -185,17 +175,18 @@ onUnmounted(() => unsubscribeProgress?.())
               :disabled="busy"
               @click="onAddSample"
             >
-              {{ t('backend.addSample') }}
+              הוספת חשבונית לדוגמה
             </button>
             <button
               class="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-emerald-500 hover:text-emerald-300 disabled:opacity-50"
               :disabled="busy"
               @click="() => withGuard(refresh)"
             >
-              {{ t('backend.refresh') }}
+              רענון
             </button>
             <span class="text-sm text-slate-400">
-              {{ t('backend.rows') }} <span class="font-semibold text-slate-100">{{ count }}</span>
+              שורות במסד הנתונים המקומי:
+              <span class="font-semibold text-slate-100">{{ count }}</span>
             </span>
           </div>
 
@@ -208,8 +199,10 @@ onUnmounted(() => unsubscribeProgress?.())
         <section class="mt-6 rounded-xl border border-slate-800 bg-slate-900/60 p-6">
           <div class="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h2 class="text-lg font-semibold">{{ t('scan.title') }}</h2>
-              <p class="mt-1 text-sm text-slate-400">{{ t('scan.desc') }}</p>
+              <h2 class="text-lg font-semibold">סריקת תיבת הדואר</h2>
+              <p class="mt-1 text-sm text-slate-400">
+                משיכת הודעות אחרונות מ-Gmail, זיהוי חשבוניות וקבלות, והורדתן למחשב.
+              </p>
             </div>
             <button
               class="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
@@ -237,14 +230,14 @@ onUnmounted(() => unsubscribeProgress?.())
                   d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
                 />
               </svg>
-              {{ scanning ? t('scan.scanning') : t('scan.now') }}
+              {{ scanning ? 'סורק…' : 'סרוק עכשיו' }}
             </button>
           </div>
 
           <!-- Per-run controls: message cap + optional date range -->
           <div class="mt-4 flex flex-wrap items-end gap-4">
             <label class="text-sm text-slate-400">
-              <span class="mb-1 block">{{ t('scan.maxLabel') }}</span>
+              <span class="mb-1 block">מספר הודעות מרבי</span>
               <input
                 v-model.number="scanMax"
                 type="number"
@@ -255,7 +248,7 @@ onUnmounted(() => unsubscribeProgress?.())
               />
             </label>
             <label class="text-sm text-slate-400">
-              <span class="mb-1 block">{{ t('scan.fromLabel') }}</span>
+              <span class="mb-1 block">מתאריך</span>
               <input
                 v-model="scanFrom"
                 type="date"
@@ -264,7 +257,7 @@ onUnmounted(() => unsubscribeProgress?.())
               />
             </label>
             <label class="text-sm text-slate-400">
-              <span class="mb-1 block">{{ t('scan.toLabel') }}</span>
+              <span class="mb-1 block">עד תאריך</span>
               <input
                 v-model="scanTo"
                 type="date"
@@ -273,7 +266,9 @@ onUnmounted(() => unsubscribeProgress?.())
               />
             </label>
           </div>
-          <p class="mt-2 text-xs text-slate-500">{{ t('scan.rangeHint') }}</p>
+          <p class="mt-2 text-xs text-slate-500">
+            השאר/י את התאריכים ריקים כדי לסרוק את השנה האחרונה.
+          </p>
 
           <!-- Live progress (scan robustness) -->
           <div v-if="scanning && scanProgress" class="mt-4">
@@ -295,14 +290,12 @@ onUnmounted(() => unsubscribeProgress?.())
             v-if="scanSummary"
             class="mt-4 rounded-lg bg-slate-800/60 px-3 py-2 text-sm text-slate-300"
           >
-            {{ t('scan.scanned') }}
-            <span class="font-semibold text-slate-100">{{ scanSummary.scanned }}</span> ·
-            {{ t('scan.matched') }}
-            <span class="font-semibold text-slate-100">{{ scanSummary.matched }}</span> ·
-            {{ t('scan.downloaded') }}
+            נסרקו
+            <span class="font-semibold text-slate-100">{{ scanSummary.scanned }}</span> · התאמות
+            <span class="font-semibold text-slate-100">{{ scanSummary.matched }}</span> · הורדו
             <span class="font-semibold text-emerald-300">{{ scanSummary.downloaded }}</span>
             <span v-if="scanSummary.errors > 0" class="text-amber-300">
-              · {{ t('scan.errors', { count: scanSummary.errors }) }}
+              · {{ scanSummary.errors }} שגיאות
             </span>
           </p>
           <p

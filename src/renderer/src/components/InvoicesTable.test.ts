@@ -2,7 +2,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import InvoicesTable from './InvoicesTable.vue'
-import { setLocale } from '../lib/useI18n'
 import type { Invoice } from '@shared/types'
 
 /** Build an Invoice with sensible defaults; override only what a test needs. */
@@ -26,7 +25,6 @@ const openFile = vi.fn<(id: number) => Promise<string>>()
 const saveFile = vi.fn<(req: { defaultName: string; content: string }) => Promise<string | null>>()
 
 beforeEach(() => {
-  setLocale('en') // assertions below check the English strings
   openFile.mockReset()
   openFile.mockResolvedValue('')
   saveFile.mockReset()
@@ -50,13 +48,13 @@ describe('InvoicesTable.vue', () => {
       props: { invoices: [inv({ id: 1 }), inv({ id: 2 }), inv({ id: 3 })] }
     })
     expect(wrapper.findAll('tbody tr')).toHaveLength(3)
-    expect(wrapper.text()).toContain('Showing 3 of 3')
+    expect(wrapper.text()).toContain('מציג 3 מתוך 3')
   })
 
   it('shows the empty state when there are no invoices', () => {
     const wrapper = mount(InvoicesTable, { props: { invoices: [] } })
     expect(wrapper.findAll('tbody tr')).toHaveLength(0)
-    expect(wrapper.text()).toContain('No invoices yet')
+    expect(wrapper.text()).toContain('אין עדיין חשבוניות')
   })
 
   it('disables Open file when there is no local file, enables it otherwise', () => {
@@ -99,7 +97,7 @@ describe('InvoicesTable.vue', () => {
         ]
       }
     })
-    const amountHeader = wrapper.findAll('thead th').find((th) => th.text().includes('Amount'))!
+    const amountHeader = wrapper.findAll('thead th').find((th) => th.text().includes('סכום'))!
     await amountHeader.trigger('click') // first click → ascending
     expect(vendorOrder(wrapper)).toEqual(['A10', 'B20', 'C30'])
     await amountHeader.trigger('click') // second click → descending
@@ -114,11 +112,11 @@ describe('InvoicesTable.vue', () => {
     })
     await wrapper.find('input[type="search"]').setValue('electric')
     expect(vendorOrder(wrapper)).toEqual(['Electric Co'])
-    expect(wrapper.text()).toContain('Showing 1 of 2')
+    expect(wrapper.text()).toContain('מציג 1 מתוך 2')
 
     await wrapper.find('input[type="search"]').setValue('zzzz')
     expect(wrapper.findAll('tbody tr')).toHaveLength(0)
-    expect(wrapper.text()).toContain('No invoices match')
+    expect(wrapper.text()).toContain('אין חשבוניות התואמות')
   })
 
   it('exports the filtered rows to CSV via the save dialog (RONY-15)', async () => {
@@ -130,22 +128,23 @@ describe('InvoicesTable.vue', () => {
     // Narrow to one row, then export — only the shown row should be in the CSV.
     await wrapper.find('input[type="search"]').setValue('electric')
 
-    const exportBtn = wrapper.findAll('button').find((b) => b.text().includes('Export'))!
+    const exportBtn = wrapper.findAll('button').find((b) => b.text().includes('ייצוא'))!
     await exportBtn.trigger('click')
     await flushPromises()
 
     expect(saveFile).toHaveBeenCalledTimes(1)
     const { defaultName, content } = saveFile.mock.calls[0][0]
     expect(defaultName).toMatch(/^invoices-\d{4}-\d{2}-\d{2}\.csv$/)
+    // CSV header stays English for stable, portable data interchange.
     expect(content).toContain('Date,Vendor,Amount,Currency,Found by,Status,File')
     expect(content).toContain('Electric Co')
     expect(content).not.toContain('Water Ltd') // filtered out
-    expect(wrapper.text()).toContain('Exported 1 row')
+    expect(wrapper.text()).toContain('יוצאו 1 שורות')
   })
 
   it('disables Export when there are no rows', () => {
     const wrapper = mount(InvoicesTable, { props: { invoices: [] } })
-    const exportBtn = wrapper.findAll('button').find((b) => b.text().includes('Export'))!
+    const exportBtn = wrapper.findAll('button').find((b) => b.text().includes('ייצוא'))!
     expect((exportBtn.element as HTMLButtonElement).disabled).toBe(true)
   })
 })

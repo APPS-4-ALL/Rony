@@ -2,11 +2,9 @@ import { describe, it, expect } from 'vitest'
 import {
   coerceAiProvider,
   coerceDefaultEngine,
-  coerceLocale,
   DEFAULT_SETTINGS,
   isAiProvider,
-  isEngineType,
-  isLocale
+  isEngineType
 } from './validate'
 
 describe('settings validation', () => {
@@ -37,16 +35,5 @@ describe('settings validation', () => {
     expect(coerceAiProvider('gemini')).toBe('gemini')
     expect(coerceAiProvider('garbage')).toBe(DEFAULT_SETTINGS.aiProvider)
     expect(coerceAiProvider(undefined)).toBe('openai')
-  })
-
-  it('recognises + coerces the UI locale, defaulting to Hebrew', () => {
-    expect(isLocale('he')).toBe(true)
-    expect(isLocale('en')).toBe(true)
-    expect(isLocale('fr')).toBe(false)
-    expect(isLocale(undefined)).toBe(false)
-    expect(DEFAULT_SETTINGS.locale).toBe('he')
-    expect(coerceLocale('en')).toBe('en')
-    expect(coerceLocale('garbage')).toBe('he')
-    expect(coerceLocale(undefined)).toBe('he')
   })
 })
