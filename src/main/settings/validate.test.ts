@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   coerceAiProvider,
   coerceDefaultEngine,
+  coerceDownloadDir,
   DEFAULT_SETTINGS,
   isAiProvider,
   isEngineType
@@ -35,5 +36,15 @@ describe('settings validation', () => {
     expect(coerceAiProvider('gemini')).toBe('gemini')
     expect(coerceAiProvider('garbage')).toBe(DEFAULT_SETTINGS.aiProvider)
     expect(coerceAiProvider(undefined)).toBe('openai')
+  })
+
+  it('coerces the optional download folder (non-empty string, else null)', () => {
+    expect(coerceDownloadDir('C:/Invoices')).toBe('C:/Invoices')
+    expect(coerceDownloadDir('')).toBeNull()
+    expect(coerceDownloadDir('   ')).toBeNull()
+    expect(coerceDownloadDir(undefined)).toBeNull()
+    expect(coerceDownloadDir(null)).toBeNull()
+    expect(coerceDownloadDir(42)).toBeNull()
+    expect(DEFAULT_SETTINGS.downloadDir).toBeNull()
   })
 })

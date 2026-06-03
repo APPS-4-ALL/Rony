@@ -7,11 +7,8 @@ import type { RoniApi, ScanProgress } from '../shared/types'
 // main-process `ipcMain.handle` channel via `ipcRenderer.invoke`, so the
 // renderer never touches Node/Electron internals directly.
 const api: RoniApi = {
-  ping: () => ipcRenderer.invoke(IpcChannels.ping),
   invoices: {
     list: () => ipcRenderer.invoke(IpcChannels.invoicesList),
-    count: () => ipcRenderer.invoke(IpcChannels.invoicesCount),
-    addSample: () => ipcRenderer.invoke(IpcChannels.invoicesAddSample),
     openFile: (invoiceId) => ipcRenderer.invoke(IpcChannels.invoicesOpenFile, invoiceId)
   },
   auth: {
@@ -37,7 +34,8 @@ const api: RoniApi = {
     }
   },
   dialog: {
-    saveFile: (req) => ipcRenderer.invoke(IpcChannels.dialogSaveFile, req)
+    saveFile: (req) => ipcRenderer.invoke(IpcChannels.dialogSaveFile, req),
+    pickFolder: () => ipcRenderer.invoke(IpcChannels.dialogPickFolder)
   }
 }
 

@@ -9,7 +9,8 @@ import type { AiProvider, EngineType, Settings } from '../../shared/types'
 /** Used when nothing is stored yet, or a stored value is invalid/corrupt. */
 export const DEFAULT_SETTINGS: Settings = {
   defaultEngine: 'deterministic',
-  aiProvider: 'openai'
+  aiProvider: 'openai',
+  downloadDir: null
 }
 
 /** Type guard for the scan-engine union. */
@@ -30,4 +31,12 @@ export function isAiProvider(value: unknown): value is AiProvider {
 /** Coerce any raw/stored value into a valid AI provider, falling back to the default. */
 export function coerceAiProvider(value: unknown): AiProvider {
   return isAiProvider(value) ? value : DEFAULT_SETTINGS.aiProvider
+}
+
+/**
+ * Coerce a raw/stored download-folder value: a non-empty string is the user's
+ * custom folder; anything else (empty, null, non-string) means "use the default".
+ */
+export function coerceDownloadDir(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() !== '' ? value : null
 }

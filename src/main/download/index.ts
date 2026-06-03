@@ -10,15 +10,24 @@ import { app } from 'electron'
 import { getAuthorizedClient } from '../auth'
 import { fetchAttachmentData, NotConnectedError } from '../gmail'
 import { invoiceExistsByPath, tryInsertInvoice } from '../db'
+import { getSettings } from '../settings'
 import { downloadApproved, type ApprovedEmail, type DownloadSummary } from './core'
 
 /**
- * Local folder invoices are saved to: `Documents/Rony Invoices`.
+ * Default folder invoices are saved to: `Documents/Rony Invoices`.
  * Pure path utility — the download core creates the folder asynchronously
  * (`mkdir … { recursive: true }`), so we don't block the main thread here.
  */
 export function getInvoicesDir(): string {
   return join(app.getPath('documents'), 'Rony Invoices')
+}
+
+/**
+ * The folder invoices actually save to: the user's chosen `downloadDir`
+ * (Settings) if set, otherwise the default {@link getInvoicesDir}.
+ */
+export function getEffectiveInvoicesDir(): string {
+  return getSettings().downloadDir ?? getInvoicesDir()
 }
 
 /**
@@ -36,7 +45,7 @@ export async function downloadAndRecord(
   return downloadApproved(
     approved,
     {
-      targetDir: getInvoicesDir(),
+      targetDir: getEffectiveInvoicesDir(),
       fetchAttachment: (messageId, attachmentId) =>
         fetchAttachmentData(client, messageId, attachmentId),
       store: { existsByPath: invoiceExistsByPath, insert: tryInsertInvoice }
