@@ -103,10 +103,9 @@ const KEYWORD_PATTERNS: ReadonlyArray<{ keyword: string; pattern: RegExp }> = IN
  * DoD: running this on a fixed string finds a match by the predefined keywords.
  */
 export function classifyDeterministic(input: DeterministicInput): DeterministicResult {
-  // TODO(RONY-7): when real Gmail messages arrive, the body will be raw HTML
-  // and/or base64-encoded parts. Strip HTML tags and decode/drop base64 blobs
-  // BEFORE building the haystack — otherwise we match noise and pay a big perf
-  // cost scanning huge encoded strings. Pass clean plain text into this engine.
+  // `body` is already clean plain text here: the RONY-7 parser strips HTML and
+  // decodes the base64 parts before handing the email to any engine, so we can
+  // build the haystack directly without re-sanitising.
   const haystack = [input.subject, input.body, ...input.filenames]
     .filter((part): part is string => Boolean(part))
     .join('\n')

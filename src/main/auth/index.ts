@@ -12,10 +12,10 @@
  * the user authenticates in their trusted browser.
  */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { type AddressInfo } from 'node:net'
 import { shell } from 'electron'
-import { OAuth2Client } from 'google-auth-library'
+import { CodeChallengeMethod, OAuth2Client } from 'google-auth-library'
 import type { AuthStatus } from '../../shared/types'
 import { getOAuthCredentials, OAUTH_SCOPES } from './credentials'
 import { clearAuth, loadAuth, saveAuth } from './tokenStore'
@@ -84,6 +84,11 @@ export function login(): Promise<AuthStatus> {
   }
 
   const expectedState = randomBytes(16).toString('hex')
+  // PKCE (RFC 8252 §8.1): bind this request to a one-time secret. We send only
+  // the SHA-256 challenge to Google and reveal the verifier only at token
+  // exchange, so an intercepted authorization code can't be redeemed by anyone.
+  const codeVerifier = randomBytes(32).toString('base64url')
+  const codeChallenge = createHash('sha256').update(codeVerifier).digest('base64url')
 
   return new Promise<AuthStatus>((resolve, reject) => {
     const server = createServer()
@@ -142,7 +147,7 @@ export function login(): Promise<AuthStatus> {
         `http://127.0.0.1:${port}`
       )
       client
-        .getToken(code as string)
+        .getToken({ code: code as string, codeVerifier })
         .then(({ tokens }) => {
           const email = emailFromIdToken(tokens.id_token)
           saveAuth({ tokens, email })
@@ -169,7 +174,9 @@ export function login(): Promise<AuthStatus> {
         access_type: 'offline', // request a refresh token
         prompt: 'consent', // force refresh_token even on re-auth
         scope: OAUTH_SCOPES,
-        state: expectedState
+        state: expectedState,
+        code_challenge_method: CodeChallengeMethod.S256,
+        code_challenge: codeChallenge
       })
       shell.openExternal(authUrl).catch((e) => finish(e))
     })

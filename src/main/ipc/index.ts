@@ -44,11 +44,11 @@ export function registerIpcHandlers(): void {
   // Returns '' on success (matching shell.openPath) or a readable error.
   ipcMain.handle(IpcChannels.invoicesOpenFile, async (_e, invoiceId: number): Promise<string> => {
     if (typeof invoiceId !== 'number' || !Number.isInteger(invoiceId)) {
-      return 'Invalid invoice id.'
+      return 'מזהה חשבונית לא תקין.'
     }
     const invoice = getInvoiceById(invoiceId)
-    if (!invoice) return 'Invoice not found.'
-    if (!invoice.localFilePath) return 'No file is associated with this invoice yet.'
+    if (!invoice) return 'החשבונית לא נמצאה.'
+    if (!invoice.localFilePath) return 'אין קובץ המשויך לחשבונית זו עדיין.'
 
     // Containment check: the stored path MUST live inside an invoices folder we
     // control — the user's current download folder OR the default (older files
@@ -58,7 +58,7 @@ export function registerIpcHandlers(): void {
       console.error(
         `[security] refused to open out-of-bounds path for invoice ${invoiceId}: ${invoice.localFilePath}`
       )
-      return 'Refused to open a file outside the invoices folder.'
+      return 'הקובץ נמצא מחוץ לתיקיית החשבוניות — הפתיחה נחסמה.'
     }
 
     return shell.openPath(invoice.localFilePath)
@@ -77,10 +77,10 @@ export function registerIpcHandlers(): void {
   // Returns '' on success, or a readable error.
   ipcMain.handle(IpcChannels.invoicesDelete, async (_e, invoiceId: number): Promise<string> => {
     if (typeof invoiceId !== 'number' || !Number.isInteger(invoiceId)) {
-      return 'Invalid invoice id.'
+      return 'מזהה חשבונית לא תקין.'
     }
     const invoice = getInvoiceById(invoiceId)
-    if (!invoice) return 'Invoice not found.'
+    if (!invoice) return 'החשבונית לא נמצאה.'
 
     if (invoice.localFilePath) {
       const allowedDirs = [getEffectiveInvoicesDir(), getInvoicesDir()]

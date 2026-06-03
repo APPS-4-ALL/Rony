@@ -54,10 +54,11 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // Initialise the local SQLite database, run the startup self-test (RONY-3),
-  // then register the IPC handlers the renderer can call (RONY-4).
+  // Initialise the local SQLite database, then register the IPC handlers the
+  // renderer can call (RONY-4). The RONY-3 round-trip self-test runs in DEV only
+  // and cleans up after itself, so it never pollutes a user's dashboard.
   initDatabase()
-  runStartupSelfTest()
+  if (is.dev) runStartupSelfTest()
   registerIpcHandlers()
 
   createWindow()

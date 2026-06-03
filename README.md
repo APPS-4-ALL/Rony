@@ -33,11 +33,13 @@ Download the latest `.exe` installer from [GitHub Releases](https://github.com/s
 
 > Windows SmartScreen will warn you — click "More info → Run anyway". The app is unsigned in MVP (see [disclaimer](#️-important-disclaimers)).
 
+> **Note (MVP):** the build ships no Google credentials, so signing in requires your own OAuth client in the environment — see [Google API credentials](#google-api-credentials-required). In practice that means running from source for now.
+
 ---
 
 ## Build from Source
 
-**Requirements:** Node.js 18+, npm 9+ (or yarn/pnpm)
+**Requirements:** Node.js **≥20.19** (see [`.nvmrc`](.nvmrc) — 20.17 breaks the test runner), npm 9+ (or yarn/pnpm)
 
 ```bash
 git clone https://github.com/shbh8205-lgtm/invoice-scanner-rony.git
@@ -45,6 +47,16 @@ cd invoice-scanner-rony
 npm install
 npm run dev
 ```
+
+### Google API credentials (required)
+
+Rony talks to Gmail with **your own** Google OAuth *Desktop* client — it ships
+no credentials of its own. Copy [`.env.example`](.env.example) to `.env` and set
+`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (from a Google Cloud project with the
+Gmail API enabled). The app reads them from the environment, so **the packaged
+installer only authenticates when those variables are present in the environment
+it runs in** — there is no bundled secret. For most users that means running
+from source as above.
 
 To build a distributable installer:
 
@@ -66,7 +78,7 @@ The installer will be generated in your release directory.
 | UI             | Vue 3 (Composition API)                                |
 | Styling        | Tailwind CSS                                           |
 | Database       | SQLite (via better-sqlite3)                            |
-| Google APIs    | googleapis + google-auth-library (Gmail API OAuth 2.0) |
+| Google APIs    | google-auth-library (Gmail REST API, OAuth 2.0)        |
 | AI Integration | LLM API Client (Structured JSON Outputs)               |
 
 ---

@@ -83,6 +83,10 @@ export function initDatabase(): Database.Database {
     db.exec(`ALTER TABLE invoices ADD COLUMN date_source TEXT`)
   }
 
+  // Clean up junk left by earlier builds whose startup self-test inserted a
+  // "Self-Test Vendor" row on every launch (now removed at insert time).
+  db.exec(`DELETE FROM invoices WHERE message_id LIKE 'selftest-%'`)
+
   console.log(`[db] SQLite ready at ${dbPath}`)
   return db
 }
@@ -169,8 +173,10 @@ export function setSetting(key: string, value: string): void {
 }
 
 /**
- * RONY-3 Definition of Done: write a test row and read it back on startup,
- * proving the local DB round-trips correctly. Logs the result to the console.
+ * RONY-3 Definition of Done: write a test row, read it back, then REMOVE it —
+ * proving the local DB round-trips without leaving junk in the user's dashboard.
+ * Intended for dev only (the caller gates it); the inserted row is always
+ * cleaned up so even repeated dev launches don't accumulate test rows.
  */
 export function runStartupSelfTest(): void {
   const before = countInvoices()
@@ -186,8 +192,9 @@ export function runStartupSelfTest(): void {
     engineType: 'deterministic'
   })
   const readBack = getInvoiceById(inserted.id)
+  deleteInvoice(inserted.id) // never pollute the real table
   console.log(
-    `[db] startup self-test: wrote row #${inserted.id} (count ${before} -> ${countInvoices()}), ` +
+    `[db] startup self-test: wrote+read+removed row #${inserted.id} (count back to ${before}), ` +
       `read back vendor="${readBack?.vendor}", amount=${readBack?.amount}`
   )
 }
