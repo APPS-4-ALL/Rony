@@ -132,6 +132,12 @@ export function tryInsertInvoice(invoice: NewInvoice): boolean {
   return info.changes > 0
 }
 
+/** Delete an invoice row by id. Returns true if a row was actually removed. */
+export function deleteInvoice(id: number): boolean {
+  const info = getDb().prepare('DELETE FROM invoices WHERE id = ?').run(id)
+  return info.changes > 0
+}
+
 /* ----------------------------- app settings (RONY-12) ----------------------------- */
 
 /** Read a settings value by key, or undefined if unset. */

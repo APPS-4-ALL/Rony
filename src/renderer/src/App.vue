@@ -63,13 +63,18 @@ async function refresh(): Promise<void> {
   invoices.value = await window.api.invoices.list()
 }
 
+/** Reload the table (used on mount and after a row is deleted). */
+function reloadInvoices(): void {
+  refresh().catch((e) => console.error('Failed to load invoices:', e))
+}
+
 let unsubscribeProgress: (() => void) | null = null
 /** Subscribe to live progress, then load the table. */
 onMounted(() => {
   unsubscribeProgress = window.api.scan.onProgress((p) => {
     scanProgress.value = p
   })
-  refresh().catch((e) => console.error('Failed to load invoices:', e))
+  reloadInvoices()
 })
 onUnmounted(() => unsubscribeProgress?.())
 </script>
@@ -236,7 +241,7 @@ onUnmounted(() => unsubscribeProgress?.())
 
         <!-- Invoices dashboard table (RONY-13) — renders directly from SQLite -->
         <div class="mt-6">
-          <InvoicesTable :invoices="invoices" />
+          <InvoicesTable :invoices="invoices" @deleted="reloadInvoices" />
         </div>
       </template>
     </div>
