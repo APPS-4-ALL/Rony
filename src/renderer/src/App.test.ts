@@ -17,6 +17,12 @@ function stubApi(): void {
       addSample: vi.fn(),
       openFile: vi.fn().mockResolvedValue('')
     },
+    // English locale so the assertions below match the rendered (English) strings.
+    settings: {
+      get: vi
+        .fn()
+        .mockResolvedValue({ defaultEngine: 'deterministic', aiProvider: 'openai', locale: 'en' })
+    },
     scan: { run: scanRun, onProgress: vi.fn(() => () => {}) }
   })
 }

@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import InvoicesTable from './InvoicesTable.vue'
+import { setLocale } from '../lib/useI18n'
 import type { Invoice } from '@shared/types'
 
 /** Build an Invoice with sensible defaults; override only what a test needs. */
@@ -25,6 +26,7 @@ const openFile = vi.fn<(id: number) => Promise<string>>()
 const saveFile = vi.fn<(req: { defaultName: string; content: string }) => Promise<string | null>>()
 
 beforeEach(() => {
+  setLocale('en') // assertions below check the English strings
   openFile.mockReset()
   openFile.mockResolvedValue('')
   saveFile.mockReset()

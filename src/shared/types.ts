@@ -48,12 +48,31 @@ export interface AuthStatus {
 /** Supported external LLM providers for the AI engine (RONY-10/16). */
 export type AiProvider = 'openai' | 'gemini'
 
+/** UI language. Hebrew is the default; English is the optional alternative. */
+export type Locale = 'he' | 'en'
+
 /** User-configurable settings (RONY-12, RONY-16). */
 export interface Settings {
   /** Which engine runs by default when the user hits "Scan now". */
   defaultEngine: EngineType
   /** Which AI provider the AI engine uses when `defaultEngine` is 'ai' (RONY-16). */
   aiProvider: AiProvider
+  /** Interface language. Defaults to Hebrew ('he'). */
+  locale: Locale
+}
+
+/**
+ * Per-run scan controls, chosen in the UI (max messages + optional date range).
+ * All fields are optional — an omitted field falls back to the engine default
+ * (50 messages, last 1 year).
+ */
+export interface ScanOptions {
+  /** Hard cap on how many messages to pull in one run. */
+  maxResults?: number
+  /** Lower date bound, inclusive (ISO `YYYY-MM-DD`). */
+  after?: string
+  /** Upper date bound, exclusive (ISO `YYYY-MM-DD`). */
+  before?: string
 }
 
 /** The phases a scan moves through, reported live via `scan.onProgress`. */
@@ -142,8 +161,12 @@ export interface RoniApi {
   }
   /** Gmail sync + scan pipeline (RONY-7/9/10/11, triggered by RONY-14). */
   scan: {
-    /** Run a scan in the background; resolves with a summary. */
-    run: () => Promise<ScanResult>
+    /**
+     * Run a full scan in the background; resolves with a summary. Optional
+     * `opts` let the user cap the message count and/or restrict the date range
+     * for this run; omitted fields use the engine defaults.
+     */
+    run: (opts?: ScanOptions) => Promise<ScanResult>
     /**
      * Subscribe to live scan progress. Returns an unsubscribe function — call it
      * (e.g. on unmount) to stop listening.

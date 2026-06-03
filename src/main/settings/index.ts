@@ -7,16 +7,18 @@
  */
 import { getSetting, setSetting } from '../db'
 import type { Settings } from '../../shared/types'
-import { coerceAiProvider, coerceDefaultEngine } from './validate'
+import { coerceAiProvider, coerceDefaultEngine, coerceLocale } from './validate'
 
 const KEY_DEFAULT_ENGINE = 'defaultEngine'
 const KEY_AI_PROVIDER = 'aiProvider'
+const KEY_LOCALE = 'locale'
 
 /** Read the current settings, applying defaults for anything unset/invalid. */
 export function getSettings(): Settings {
   return {
     defaultEngine: coerceDefaultEngine(getSetting(KEY_DEFAULT_ENGINE)),
-    aiProvider: coerceAiProvider(getSetting(KEY_AI_PROVIDER))
+    aiProvider: coerceAiProvider(getSetting(KEY_AI_PROVIDER)),
+    locale: coerceLocale(getSetting(KEY_LOCALE))
   }
 }
 
@@ -27,6 +29,9 @@ export function updateSettings(patch: Partial<Settings>): Settings {
   }
   if (patch.aiProvider !== undefined) {
     setSetting(KEY_AI_PROVIDER, coerceAiProvider(patch.aiProvider))
+  }
+  if (patch.locale !== undefined) {
+    setSetting(KEY_LOCALE, coerceLocale(patch.locale))
   }
   return getSettings()
 }

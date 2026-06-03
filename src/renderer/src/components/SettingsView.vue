@@ -1,10 +1,18 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import type { AiProvider, AuthStatus, EngineType, Settings } from '@shared/types'
+import type { AiProvider, AuthStatus, EngineType, Locale, Settings } from '@shared/types'
 import { connectionDisplay, ENGINE_OPTIONS, PROVIDER_OPTIONS } from '../lib/settingsView'
+import { useI18n } from '../lib/useI18n'
+import { LOCALE_OPTIONS } from '../lib/i18n'
+
+const { t, locale, setLocale } = useI18n()
 
 const status = ref<AuthStatus>({ connected: false, email: null })
-const settings = ref<Settings>({ defaultEngine: 'deterministic', aiProvider: 'openai' })
+const settings = ref<Settings>({
+  defaultEngine: 'deterministic',
+  aiProvider: 'openai',
+  locale: 'he'
+})
 const busy = ref(false)
 const error = ref('')
 
@@ -25,6 +33,7 @@ async function refreshKeyStatus(): Promise<void> {
 async function load(): Promise<void> {
   status.value = await window.api.auth.status()
   settings.value = await window.api.settings.get()
+  setLocale(settings.value.locale)
   await refreshKeyStatus()
 }
 
@@ -63,6 +72,12 @@ const selectProvider = (provider: AiProvider): Promise<void> =>
     await refreshKeyStatus()
   })
 
+const selectLocale = (next: Locale): Promise<void> =>
+  guarded(async () => {
+    settings.value = await window.api.settings.set({ locale: next })
+    setLocale(next)
+  })
+
 const saveApiKey = (): Promise<void> =>
   guarded(async () => {
     const key = apiKeyInput.value.trim()
@@ -85,16 +100,24 @@ onMounted(() => guarded(load))
   <div class="space-y-6">
     <!-- Gmail connection -->
     <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
-      <h2 class="text-lg font-semibold">Gmail connection</h2>
+      <h2 class="text-lg font-semibold">{{ t('settings.gmail.title') }}</h2>
 
       <div class="mt-4 flex flex-wrap items-center justify-between gap-4">
         <div class="flex items-center gap-3">
           <span class="inline-block h-2.5 w-2.5 rounded-full" :class="conn.badgeColor" />
           <div>
             <p class="font-medium" :class="conn.textColor">
-              {{ conn.label }}
+              {{
+                conn.connected ? t('settings.gmail.connected') : t('settings.gmail.disconnected')
+              }}
             </p>
-            <p class="text-sm text-slate-400">{{ conn.detail }}</p>
+            <p class="text-sm text-slate-400">
+              {{
+                conn.connected
+                  ? (status.email ?? t('settings.gmail.account'))
+                  : t('settings.gmail.notConnected')
+              }}
+            </p>
           </div>
         </div>
 
@@ -104,7 +127,7 @@ onMounted(() => guarded(load))
           :disabled="busy"
           @click="onLogout"
         >
-          Disconnect
+          {{ t('settings.gmail.disconnect') }}
         </button>
         <button
           v-else
@@ -112,27 +135,48 @@ onMounted(() => guarded(load))
           :disabled="busy"
           @click="onLogin"
         >
-          {{ busy ? 'Connecting…' : 'Connect Gmail' }}
+          {{ busy ? t('settings.gmail.connecting') : t('settings.gmail.connect') }}
         </button>
       </div>
 
       <p v-if="!conn.connected && busy" class="mt-3 text-sm text-slate-400">
-        A browser window opened — approve access there to finish connecting.
+        {{ t('settings.gmail.browserHint') }}
       </p>
+    </section>
+
+    <!-- Language -->
+    <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
+      <h2 class="text-lg font-semibold">{{ t('settings.lang.title') }}</h2>
+      <p class="mt-1 text-sm text-slate-400">{{ t('settings.lang.desc') }}</p>
+
+      <div class="mt-4 flex gap-2">
+        <button
+          v-for="opt in LOCALE_OPTIONS"
+          :key="opt.value"
+          class="rounded-lg border px-3 py-1.5 text-sm font-medium transition disabled:opacity-50"
+          :class="
+            locale === opt.value
+              ? 'border-emerald-500 bg-emerald-500/10 text-emerald-200'
+              : 'border-slate-700 text-slate-300 hover:border-slate-500'
+          "
+          :disabled="busy"
+          @click="selectLocale(opt.value)"
+        >
+          {{ opt.label }}
+        </button>
+      </div>
     </section>
 
     <!-- Default scan engine -->
     <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
-      <h2 class="text-lg font-semibold">Default scan engine</h2>
-      <p class="mt-1 text-sm text-slate-400">
-        Which engine runs by default when you scan. You can change this anytime.
-      </p>
+      <h2 class="text-lg font-semibold">{{ t('settings.engine.title') }}</h2>
+      <p class="mt-1 text-sm text-slate-400">{{ t('settings.engine.desc') }}</p>
 
       <div class="mt-4 grid gap-3 sm:grid-cols-2">
         <button
           v-for="opt in ENGINE_OPTIONS"
           :key="opt.value"
-          class="rounded-lg border p-4 text-left transition disabled:opacity-50"
+          class="rounded-lg border p-4 text-start transition disabled:opacity-50"
           :class="
             settings.defaultEngine === opt.value
               ? 'border-emerald-500 bg-emerald-500/10'
@@ -142,25 +186,27 @@ onMounted(() => guarded(load))
           @click="selectEngine(opt.value)"
         >
           <div class="flex items-center justify-between">
-            <span class="font-medium text-slate-100">{{ opt.label }}</span>
+            <span class="font-medium text-slate-100">{{
+              t(`settings.engine.${opt.value}.label`)
+            }}</span>
             <span
               v-if="settings.defaultEngine === opt.value"
               class="text-xs font-semibold text-emerald-400"
-              >Selected</span
+              >{{ t('settings.engine.selected') }}</span
             >
           </div>
-          <p class="mt-1 text-sm text-slate-400">{{ opt.description }}</p>
+          <p class="mt-1 text-sm text-slate-400">{{ t(`settings.engine.${opt.value}.desc`) }}</p>
         </button>
       </div>
     </section>
 
     <!-- AI provider + API key (RONY-16) — only when the AI engine is selected -->
     <section v-if="showAi" class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
-      <h2 class="text-lg font-semibold">AI provider &amp; API key</h2>
+      <h2 class="text-lg font-semibold">{{ t('settings.ai.title') }}</h2>
       <p class="mt-1 text-sm text-slate-400">
-        The AI engine sends email text to your chosen provider. Your key is stored
-        <span class="text-slate-200">encrypted on this computer</span> and never leaves it except to
-        call the provider.
+        {{ t('settings.ai.desc1')
+        }}<span class="text-slate-200">{{ t('settings.ai.descEmph') }}</span
+        >{{ t('settings.ai.desc2') }}
       </p>
 
       <!-- Provider -->
@@ -182,13 +228,17 @@ onMounted(() => guarded(load))
       </div>
 
       <!-- Key -->
-      <label class="mt-4 block text-sm text-slate-400">{{ providerLabel }} API key</label>
+      <label class="mt-4 block text-sm text-slate-400">{{
+        t('settings.ai.keyLabel', { provider: providerLabel })
+      }}</label>
       <div class="mt-1 flex flex-wrap items-center gap-2">
         <input
           v-model="apiKeyInput"
           type="password"
           autocomplete="off"
-          :placeholder="apiKeySet ? '•••••••• (a key is saved)' : 'Paste your API key'"
+          :placeholder="
+            apiKeySet ? t('settings.ai.placeholderSet') : t('settings.ai.placeholderEmpty')
+          "
           class="w-72 rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:outline-none"
         />
         <button
@@ -196,7 +246,7 @@ onMounted(() => guarded(load))
           :disabled="busy || !apiKeyInput.trim()"
           @click="saveApiKey"
         >
-          Save
+          {{ t('settings.ai.save') }}
         </button>
         <button
           v-if="apiKeySet"
@@ -204,14 +254,14 @@ onMounted(() => guarded(load))
           :disabled="busy"
           @click="clearKey"
         >
-          Clear
+          {{ t('settings.ai.clear') }}
         </button>
       </div>
       <p class="mt-2 text-sm" :class="apiKeySet ? 'text-emerald-400' : 'text-slate-500'">
         {{
           apiKeySet
-            ? `✓ A key is securely stored for ${providerLabel}.`
-            : 'No key stored yet — the AI engine needs one to run.'
+            ? t('settings.ai.stored', { provider: providerLabel })
+            : t('settings.ai.notStored')
         }}
       </p>
     </section>

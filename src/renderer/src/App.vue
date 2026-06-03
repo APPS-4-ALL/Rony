@@ -1,9 +1,17 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
-import type { Invoice, ScanProgress, ScanResult } from '@shared/types'
+import type { Invoice, ScanOptions, ScanProgress, ScanResult } from '@shared/types'
 import InvoicesTable from './components/InvoicesTable.vue'
 import SettingsView from './components/SettingsView.vue'
+import { useI18n } from './lib/useI18n'
 import { progressLabel } from './lib/scanControls'
+
+const { t, locale, setLocale } = useI18n()
+
+/** Flip between the two languages from the header toggle. */
+function toggleLocale(): void {
+  setLocale(locale.value === 'he' ? 'en' : 'he')
+}
 
 type View = 'dashboard' | 'settings'
 const view = ref<View>('dashboard')
@@ -20,6 +28,21 @@ const scanSummary = ref<ScanResult | null>(null)
 const scanError = ref<string>('')
 const scanProgress = ref<ScanProgress | null>(null)
 
+// Per-run scan controls (count + optional date range). Empty dates → the
+// engine's default 1-year look-back; the main process re-validates these.
+const scanMax = ref<number>(50)
+const scanFrom = ref<string>('')
+const scanTo = ref<string>('')
+
+/** Build the options payload, omitting blank/invalid fields. */
+function scanOptions(): ScanOptions {
+  const opts: ScanOptions = {}
+  if (Number.isFinite(scanMax.value) && scanMax.value > 0) opts.maxResults = scanMax.value
+  if (scanFrom.value) opts.after = scanFrom.value
+  if (scanTo.value) opts.before = scanTo.value
+  return opts
+}
+
 /**
  * Run a Gmail scan. Shows live progress, then refreshes the table on
  * completion. Errors surface inline (the UI never crashes).
@@ -31,7 +54,7 @@ async function onScan(): Promise<void> {
   scanSummary.value = null
   scanProgress.value = null
   try {
-    scanSummary.value = await window.api.scan.run()
+    scanSummary.value = await window.api.scan.run(scanOptions())
     await refresh()
   } catch (e) {
     scanError.value = e instanceof Error ? e.message : String(e)
@@ -70,11 +93,16 @@ const onAddSample = (): Promise<void> =>
   })
 
 let unsubscribeProgress: (() => void) | null = null
+/** Subscribe to live progress, apply the persisted language, then load the table. */
 onMounted(() => {
   unsubscribeProgress = window.api.scan.onProgress((p) => {
     scanProgress.value = p
   })
-  void withGuard(refresh)
+  void withGuard(async () => {
+    const settings = await window.api.settings.get()
+    setLocale(settings.locale)
+    await refresh()
+  })
 })
 onUnmounted(() => unsubscribeProgress?.())
 </script>
@@ -84,14 +112,20 @@ onUnmounted(() => unsubscribeProgress?.())
     <div class="mx-auto max-w-3xl px-6 py-10">
       <!-- Header -->
       <header class="mb-8">
-        <p class="text-sm font-semibold uppercase tracking-widest text-emerald-400">
-          Roni · Local-first
-        </p>
-        <h1 class="mt-1 text-3xl font-bold">Invoice &amp; Receipt Scanner</h1>
-        <p class="mt-2 text-slate-400">
-          Scans your Gmail for invoices and receipts, downloads them locally, and centralises them
-          in one dashboard.
-        </p>
+        <div class="flex items-start justify-between gap-4">
+          <p class="text-sm font-semibold uppercase tracking-widest text-emerald-400">
+            {{ t('app.tagline') }}
+          </p>
+          <button
+            class="rounded-lg border border-slate-700 px-3 py-1 text-xs font-semibold text-slate-300 transition hover:border-emerald-500 hover:text-emerald-300"
+            :title="locale === 'he' ? 'Switch to English' : 'מעבר לעברית'"
+            @click="toggleLocale"
+          >
+            {{ locale === 'he' ? 'English' : 'עברית' }}
+          </button>
+        </div>
+        <h1 class="mt-1 text-3xl font-bold">{{ t('app.title') }}</h1>
+        <p class="mt-2 text-slate-400">{{ t('app.subtitle') }}</p>
       </header>
 
       <!-- View tabs (RONY-12) -->
@@ -99,7 +133,7 @@ onUnmounted(() => unsubscribeProgress?.())
         <button
           v-for="tab in ['dashboard', 'settings'] as const"
           :key="tab"
-          class="-mb-px border-b-2 px-4 py-2 text-sm font-medium capitalize transition"
+          class="-mb-px border-b-2 px-4 py-2 text-sm font-medium transition"
           :class="
             view === tab
               ? 'border-emerald-400 text-emerald-300'
@@ -107,7 +141,7 @@ onUnmounted(() => unsubscribeProgress?.())
           "
           @click="view = tab"
         >
-          {{ tab }}
+          {{ t(`nav.${tab}`) }}
         </button>
       </nav>
 
@@ -129,11 +163,8 @@ onUnmounted(() => unsubscribeProgress?.())
 
         <!-- Backend self-check: exercises IPC (RONY-4) + SQLite (RONY-3) -->
         <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
-          <h2 class="text-lg font-semibold">Backend connectivity</h2>
-          <p class="mt-1 text-sm text-slate-400">
-            These buttons call the Electron main process over a secure IPC bridge, which reads and
-            writes the local SQLite database.
-          </p>
+          <h2 class="text-lg font-semibold">{{ t('backend.title') }}</h2>
+          <p class="mt-1 text-sm text-slate-400">{{ t('backend.desc') }}</p>
 
           <div class="mt-4 flex flex-wrap items-center gap-3">
             <button
@@ -141,10 +172,10 @@ onUnmounted(() => unsubscribeProgress?.())
               :disabled="busy"
               @click="onPing"
             >
-              Ping main process
+              {{ t('backend.ping') }}
             </button>
             <span v-if="pingResult" class="text-sm text-emerald-400">
-              → main replied: <code class="font-mono">{{ pingResult }}</code>
+              {{ t('backend.replied') }} <code class="font-mono">{{ pingResult }}</code>
             </span>
           </div>
 
@@ -154,17 +185,17 @@ onUnmounted(() => unsubscribeProgress?.())
               :disabled="busy"
               @click="onAddSample"
             >
-              Add sample invoice
+              {{ t('backend.addSample') }}
             </button>
             <button
               class="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-emerald-500 hover:text-emerald-300 disabled:opacity-50"
               :disabled="busy"
               @click="() => withGuard(refresh)"
             >
-              Refresh
+              {{ t('backend.refresh') }}
             </button>
             <span class="text-sm text-slate-400">
-              Rows in local DB: <span class="font-semibold text-slate-100">{{ count }}</span>
+              {{ t('backend.rows') }} <span class="font-semibold text-slate-100">{{ count }}</span>
             </span>
           </div>
 
@@ -177,11 +208,8 @@ onUnmounted(() => unsubscribeProgress?.())
         <section class="mt-6 rounded-xl border border-slate-800 bg-slate-900/60 p-6">
           <div class="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h2 class="text-lg font-semibold">Scan your inbox</h2>
-              <p class="mt-1 text-sm text-slate-400">
-                Fetch recent Gmail messages, detect invoices &amp; receipts, and download them
-                locally.
-              </p>
+              <h2 class="text-lg font-semibold">{{ t('scan.title') }}</h2>
+              <p class="mt-1 text-sm text-slate-400">{{ t('scan.desc') }}</p>
             </div>
             <button
               class="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
@@ -209,9 +237,43 @@ onUnmounted(() => unsubscribeProgress?.())
                   d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
                 />
               </svg>
-              {{ scanning ? 'Scanning…' : 'Scan now' }}
+              {{ scanning ? t('scan.scanning') : t('scan.now') }}
             </button>
           </div>
+
+          <!-- Per-run controls: message cap + optional date range -->
+          <div class="mt-4 flex flex-wrap items-end gap-4">
+            <label class="text-sm text-slate-400">
+              <span class="mb-1 block">{{ t('scan.maxLabel') }}</span>
+              <input
+                v-model.number="scanMax"
+                type="number"
+                min="1"
+                max="1000"
+                :disabled="scanning"
+                class="w-28 rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none disabled:opacity-50"
+              />
+            </label>
+            <label class="text-sm text-slate-400">
+              <span class="mb-1 block">{{ t('scan.fromLabel') }}</span>
+              <input
+                v-model="scanFrom"
+                type="date"
+                :disabled="scanning"
+                class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none disabled:opacity-50"
+              />
+            </label>
+            <label class="text-sm text-slate-400">
+              <span class="mb-1 block">{{ t('scan.toLabel') }}</span>
+              <input
+                v-model="scanTo"
+                type="date"
+                :disabled="scanning"
+                class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none disabled:opacity-50"
+              />
+            </label>
+          </div>
+          <p class="mt-2 text-xs text-slate-500">{{ t('scan.rangeHint') }}</p>
 
           <!-- Live progress (scan robustness) -->
           <div v-if="scanning && scanProgress" class="mt-4">
@@ -233,12 +295,14 @@ onUnmounted(() => unsubscribeProgress?.())
             v-if="scanSummary"
             class="mt-4 rounded-lg bg-slate-800/60 px-3 py-2 text-sm text-slate-300"
           >
-            Scanned <span class="font-semibold text-slate-100">{{ scanSummary.scanned }}</span> ·
-            matched <span class="font-semibold text-slate-100">{{ scanSummary.matched }}</span> ·
-            downloaded
+            {{ t('scan.scanned') }}
+            <span class="font-semibold text-slate-100">{{ scanSummary.scanned }}</span> ·
+            {{ t('scan.matched') }}
+            <span class="font-semibold text-slate-100">{{ scanSummary.matched }}</span> ·
+            {{ t('scan.downloaded') }}
             <span class="font-semibold text-emerald-300">{{ scanSummary.downloaded }}</span>
             <span v-if="scanSummary.errors > 0" class="text-amber-300">
-              · {{ scanSummary.errors }} error{{ scanSummary.errors === 1 ? '' : 's' }}
+              · {{ t('scan.errors', { count: scanSummary.errors }) }}
             </span>
           </p>
           <p

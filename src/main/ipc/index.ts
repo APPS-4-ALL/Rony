@@ -8,6 +8,7 @@ import type {
   ScanResult,
   Settings
 } from '../../shared/types'
+import { sanitizeScanOptions } from '../scan/options'
 import { countInvoices, getInvoiceById, insertInvoice, listInvoices } from '../db'
 import { getAuthStatus, login, logout } from '../auth'
 import { fetchEmails } from '../gmail'
@@ -103,7 +104,7 @@ export function registerIpcHandlers(): void {
   // selected in settings (RONY-9 deterministic OR RONY-10 AI), then download the
   // matched emails' PDF/image attachments and record them in SQLite (RONY-11).
   // Triggered by the RONY-14 "Scan now" button.
-  ipcMain.handle(IpcChannels.scanRun, async (event): Promise<ScanResult> => {
+  ipcMain.handle(IpcChannels.scanRun, async (event, rawOpts: unknown): Promise<ScanResult> => {
     const sendProgress = (progress: ScanProgress): void => {
       if (!event.sender.isDestroyed()) event.sender.send(IpcChannels.scanProgress, progress)
     }
@@ -116,8 +117,14 @@ export function registerIpcHandlers(): void {
     const aiApiKey = engine === 'ai' ? getApiKey(aiProvider) : undefined
     if (engine === 'ai' && !aiApiKey) getProviderConfig(aiProvider)
 
+    // Per-run controls from the UI (count + date range), validated here since
+    // the renderer is untrusted; invalid fields fall back to engine defaults.
     sendProgress({ phase: 'fetching', processed: 0, total: 0, matched: 0, downloaded: 0 })
-    const { emails, errors: fetchErrors, firstError: fetchFirstError } = await fetchEmails()
+    const {
+      emails,
+      errors: fetchErrors,
+      firstError: fetchFirstError
+    } = await fetchEmails(sanitizeScanOptions(rawOpts))
 
     const {
       approved,
