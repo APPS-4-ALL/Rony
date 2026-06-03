@@ -30,6 +30,26 @@ export function buildGeminiParts(user: string, attachments?: AiAttachment[]): Ge
 export const completeGemini: ProviderComplete = async ({ system, user, cfg, attachments }) => {
   const url = `${GEMINI_BASE}/${encodeURIComponent(cfg.model)}:generateContent`
 
+  // "flash" models let us turn OFF thinking (thinkingBudget 0) to save the
+  // output budget and avoid truncating the JSON. "pro" models REQUIRE thinking
+  // mode — sending budget 0 there returns a 400 ("only works in thinking mode")
+  // — so we leave thinking on and give the response more room.
+  const canDisableThinking = /flash/i.test(cfg.model)
+  const generationConfig: Record<string, unknown> = {
+    // A small non-zero temperature avoids greedy-decoding repetition loops
+    // that can leave a field's string unterminated.
+    temperature: 0.2,
+    // Room for the (small) JSON answer — and, on thinking models, the thoughts.
+    maxOutputTokens: canDisableThinking ? 1024 : 8192,
+    // JSON mode WITHOUT a responseSchema: schema-constrained decoding made
+    // gemini-2.5-flash degenerate into repetition loops on Hebrew input.
+    // The prompt already specifies the exact keys; we validate centrally.
+    responseMimeType: 'application/json'
+  }
+  if (canDisableThinking) {
+    generationConfig.thinkingConfig = { thinkingBudget: 0 }
+  }
+
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -40,19 +60,7 @@ export const completeGemini: ProviderComplete = async ({ system, user, cfg, atta
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },
       contents: [{ role: 'user', parts: buildGeminiParts(user, attachments) }],
-      generationConfig: {
-        // A small non-zero temperature avoids greedy-decoding repetition loops
-        // that can leave a field's string unterminated.
-        temperature: 0.2,
-        // Disable "thinking" (Gemini 2.5+) — for this small classification it
-        // only burns the output budget and can truncate the JSON mid-stream.
-        thinkingConfig: { thinkingBudget: 0 },
-        maxOutputTokens: 1024,
-        // JSON mode WITHOUT a responseSchema: schema-constrained decoding made
-        // gemini-2.5-flash degenerate into repetition loops on Hebrew input.
-        // The prompt already specifies the exact keys; we validate centrally.
-        responseMimeType: 'application/json'
-      }
+      generationConfig
     })
   })
 
