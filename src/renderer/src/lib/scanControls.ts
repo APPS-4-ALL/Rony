@@ -1,18 +1,18 @@
 /**
- * Scan progress label (pure, framework-free).
+ * Scan progress label (pure, framework-free). Hebrew-only.
  */
 import type { ScanProgress } from '@shared/types'
 
-/** A human label for the current scan progress, e.g. "Scanning 12 of 50…". */
+/** A human label for the current scan progress, e.g. "סורק 12 מתוך 50…". */
 export function progressLabel(p: ScanProgress): string {
   switch (p.phase) {
     case 'fetching':
-      return 'Fetching messages…'
+      return 'מאחזר הודעות…'
     case 'classifying':
-      return `Scanning ${p.processed} of ${p.total}…`
+      return `סורק ${p.processed} מתוך ${p.total}…`
     case 'downloading':
-      return `Downloading ${p.processed} of ${p.total} file${p.total === 1 ? '' : 's'}…`
+      return `מוריד ${p.processed} מתוך ${p.total} ${p.total === 1 ? 'קובץ' : 'קבצים'}…`
     case 'done':
-      return 'Finishing…'
+      return 'מסיים…'
   }
 }

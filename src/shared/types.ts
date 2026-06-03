@@ -48,17 +48,12 @@ export interface AuthStatus {
 /** Supported external LLM providers for the AI engine (RONY-10/16). */
 export type AiProvider = 'openai' | 'gemini'
 
-/** UI language. Hebrew is the default; English is the optional alternative. */
-export type Locale = 'he' | 'en'
-
 /** User-configurable settings (RONY-12, RONY-16). */
 export interface Settings {
   /** Which engine runs by default when the user hits "Scan now". */
   defaultEngine: EngineType
   /** Which AI provider the AI engine uses when `defaultEngine` is 'ai' (RONY-16). */
   aiProvider: AiProvider
-  /** Interface language. Defaults to Hebrew ('he'). */
-  locale: Locale
 }
 
 /**

@@ -17,12 +17,6 @@ function stubApi(): void {
       addSample: vi.fn(),
       openFile: vi.fn().mockResolvedValue('')
     },
-    // English locale so the assertions below match the rendered (English) strings.
-    settings: {
-      get: vi
-        .fn()
-        .mockResolvedValue({ defaultEngine: 'deterministic', aiProvider: 'openai', locale: 'en' })
-    },
     scan: { run: scanRun, onProgress: vi.fn(() => () => {}) }
   })
 }
@@ -52,10 +46,10 @@ describe('App.vue — RONY-14 Scan now', () => {
     expect(count).toHaveBeenCalledTimes(1)
     expect(list).toHaveBeenCalledTimes(1)
 
-    await buttonByText(wrapper, 'Scan now').trigger('click')
+    await buttonByText(wrapper, 'סרוק עכשיו').trigger('click')
     // Loading state is visible and the button is disabled.
-    const scanBtn = buttonByText(wrapper, 'Scanning')
-    expect(scanBtn.text()).toContain('Scanning')
+    const scanBtn = buttonByText(wrapper, 'סורק')
+    expect(scanBtn.text()).toContain('סורק')
     expect((scanBtn.element as HTMLButtonElement).disabled).toBe(true)
     expect(scanRun).toHaveBeenCalledTimes(1)
 
@@ -79,10 +73,10 @@ describe('App.vue — RONY-14 Scan now', () => {
 
     // Table was refreshed from SQLite (list called again) and summary shown.
     expect(list).toHaveBeenCalledTimes(2)
-    expect(wrapper.text()).toContain('downloaded')
+    expect(wrapper.text()).toContain('הורדו')
     expect(wrapper.text()).toContain('Acme')
     // Back to idle.
-    expect(buttonByText(wrapper, 'Scan now').text()).toContain('Scan now')
+    expect(buttonByText(wrapper, 'סרוק עכשיו').text()).toContain('סרוק עכשיו')
   })
 
   it('surfaces a scan error inline without crashing the UI', async () => {
@@ -91,12 +85,12 @@ describe('App.vue — RONY-14 Scan now', () => {
     const wrapper = mount(App)
     await flushPromises()
 
-    await buttonByText(wrapper, 'Scan now').trigger('click')
+    await buttonByText(wrapper, 'סרוק עכשיו').trigger('click')
     await flushPromises()
 
     expect(wrapper.text()).toContain('Not connected to Gmail.')
     // Button recovered to idle and is clickable again.
-    const btn = buttonByText(wrapper, 'Scan now')
+    const btn = buttonByText(wrapper, 'סרוק עכשיו')
     expect((btn.element as HTMLButtonElement).disabled).toBe(false)
   })
 })

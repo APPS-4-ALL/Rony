@@ -10,10 +10,6 @@ import {
   type SortDir,
   type SortKey
 } from '../lib/invoiceTable'
-import { useI18n } from '../lib/useI18n'
-import type { MessageKey } from '../lib/i18n'
-
-const { t } = useI18n()
 
 const props = defineProps<{ invoices: Invoice[] }>()
 
@@ -26,14 +22,33 @@ const rows = computed<Invoice[]>(() =>
   sortInvoices(filterInvoices(props.invoices, search.value), sortKey.value, sortDir.value)
 )
 
-/** Sortable column definitions, in display order. `label` is an i18n key. */
-const columns: ReadonlyArray<{ key: SortKey; label: MessageKey }> = [
-  { key: 'date', label: 'col.date' },
-  { key: 'vendor', label: 'col.vendor' },
-  { key: 'amount', label: 'col.amount' },
-  { key: 'engineType', label: 'col.foundBy' },
-  { key: 'status', label: 'col.status' }
+/** Sortable column definitions, in display order (Hebrew labels). */
+const columns: ReadonlyArray<{ key: SortKey; label: string }> = [
+  { key: 'date', label: 'תאריך' },
+  { key: 'vendor', label: 'ספק' },
+  { key: 'amount', label: 'סכום' },
+  { key: 'engineType', label: 'זוהה על-ידי' },
+  { key: 'status', label: 'סטטוס' }
 ]
+
+/** Hebrew label for which engine catalogued a row. */
+function engineLabel(engine: Invoice['engineType']): string {
+  return engine === 'ai' ? 'בינה מלאכותית' : 'דטרמיניסטי'
+}
+
+/** Hebrew label for an invoice's processing status. */
+function statusLabel(status: Invoice['status']): string {
+  switch (status) {
+    case 'pending':
+      return 'ממתין'
+    case 'downloaded':
+      return 'הורד'
+    case 'exported':
+      return 'יוצא'
+    case 'error':
+      return 'שגיאה'
+  }
+}
 
 function toggleSort(key: SortKey): void {
   if (sortKey.value === key) {
@@ -77,9 +92,7 @@ async function exportCsv(): Promise<void> {
     const csv = BOM + invoicesToCsv(rows.value)
     const defaultName = `invoices-${new Date().toISOString().slice(0, 10)}.csv`
     const savedPath = await window.api.dialog.saveFile({ defaultName, content: csv })
-    exportNote.value = savedPath
-      ? t('table.exported', { count: rows.value.length, path: savedPath })
-      : '' // user cancelled the dialog — say nothing
+    exportNote.value = savedPath ? `יוצאו ${rows.value.length} שורות אל ${savedPath}` : '' // user cancelled the dialog — say nothing
   } catch (e) {
     exportNote.value = e instanceof Error ? e.message : String(e)
   } finally {
@@ -91,34 +104,34 @@ async function exportCsv(): Promise<void> {
 <template>
   <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <h2 class="text-lg font-semibold">{{ t('table.title') }}</h2>
+      <h2 class="text-lg font-semibold">חשבוניות</h2>
       <div class="flex items-center gap-2">
         <input
           v-model="search"
           type="search"
-          :placeholder="t('table.search')"
+          placeholder="סינון לפי ספק, תאריך, סכום…"
           class="w-64 rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:outline-none"
         />
         <button
           class="rounded-lg border border-slate-700 px-3 py-1.5 text-sm font-semibold text-slate-200 transition hover:border-emerald-500 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="exporting || rows.length === 0"
-          :title="rows.length === 0 ? t('table.exportTitleEmpty') : t('table.exportTitle')"
+          :title="rows.length === 0 ? 'אין מה לייצא' : 'ייצוא השורות המוצגות לקובץ CSV'"
           @click="exportCsv"
         >
-          {{ exporting ? t('table.exporting') : t('table.export') }}
+          {{ exporting ? 'מייצא…' : 'ייצוא ל-CSV' }}
         </button>
       </div>
     </div>
 
     <p class="mt-1 text-sm text-slate-400">
-      {{ t('table.showing', { shown: rows.length, total: props.invoices.length }) }}
+      מציג {{ rows.length }} מתוך {{ props.invoices.length }} חשבוניות השמורות במחשב.
     </p>
 
     <div v-if="props.invoices.length === 0" class="mt-4 text-sm text-slate-500">
-      {{ t('table.empty') }}
+      אין עדיין חשבוניות — הרץ סריקה (או הוסף דוגמה) כדי למלא את הטבלה.
     </div>
     <div v-else-if="rows.length === 0" class="mt-4 text-sm text-slate-500">
-      {{ t('table.noMatch', { query: search }) }}
+      אין חשבוניות התואמות ל“{{ search }}”.
     </div>
 
     <table v-else class="mt-4 w-full text-start text-sm">
@@ -130,10 +143,10 @@ async function exportCsv(): Promise<void> {
             class="cursor-pointer select-none py-2 pe-4 hover:text-slate-200"
             @click="toggleSort(col.key)"
           >
-            {{ t(col.label) }}
+            {{ col.label }}
             <span class="text-emerald-400">{{ sortIndicator(col.key) }}</span>
           </th>
-          <th class="py-2">{{ t('col.file') }}</th>
+          <th class="py-2">קובץ</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-slate-800">
@@ -150,18 +163,18 @@ async function exportCsv(): Promise<void> {
                   : 'bg-emerald-500/15 text-emerald-300'
               "
             >
-              {{ t(`engine.${inv.engineType}`) }}
+              {{ engineLabel(inv.engineType) }}
             </span>
           </td>
-          <td class="py-2 pe-4 text-slate-400">{{ t(`status.${inv.status}`) }}</td>
+          <td class="py-2 pe-4 text-slate-400">{{ statusLabel(inv.status) }}</td>
           <td class="py-2">
             <button
               class="rounded-md border border-slate-700 px-2.5 py-1 text-xs font-medium text-slate-200 transition hover:border-emerald-500 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-700 disabled:hover:text-slate-200"
               :disabled="!inv.localFilePath"
-              :title="inv.localFilePath ?? t('table.notDownloaded')"
+              :title="inv.localFilePath ?? 'טרם הורד'"
               @click="openFile(inv)"
             >
-              {{ t('table.open') }}
+              פתיחת קובץ
             </button>
           </td>
         </tr>
@@ -169,7 +182,7 @@ async function exportCsv(): Promise<void> {
     </table>
 
     <p v-if="openError" class="mt-4 rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">
-      {{ t('table.openError', { error: openError }) }}
+      לא ניתן לפתוח את הקובץ: {{ openError }}
     </p>
     <p v-if="exportNote" class="mt-4 rounded-lg bg-slate-800/60 px-3 py-2 text-sm text-slate-300">
       {{ exportNote }}
