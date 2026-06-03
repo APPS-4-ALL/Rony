@@ -12,6 +12,8 @@ import {
 } from '../lib/invoiceTable'
 
 const props = defineProps<{ invoices: Invoice[] }>()
+/** Tell the parent to reload after a row is deleted (it owns the list). */
+const emit = defineEmits<{ deleted: [] }>()
 
 const search = ref('')
 const sortKey = ref<SortKey>('date')
@@ -73,6 +75,19 @@ async function openFile(inv: Invoice): Promise<void> {
   if (!inv.localFilePath) return
   const err = await window.api.invoices.openFile(inv.id)
   if (err) openError.value = err
+}
+
+/** Delete the invoice (row + its file). Confirms first — it removes the file. */
+async function removeInvoice(inv: Invoice): Promise<void> {
+  openError.value = ''
+  const name = inv.vendor ?? 'חשבונית זו'
+  if (!window.confirm(`למחוק את "${name}"? הפעולה תמחק גם את הקובץ מהמחשב ואינה הפיכה.`)) return
+  const err = await window.api.invoices.delete(inv.id)
+  if (err) {
+    openError.value = err
+    return
+  }
+  emit('deleted')
 }
 
 const exporting = ref(false)
@@ -146,7 +161,7 @@ async function exportCsv(): Promise<void> {
             {{ col.label }}
             <span class="text-emerald-400">{{ sortIndicator(col.key) }}</span>
           </th>
-          <th class="py-2 px-3">קובץ</th>
+          <th class="py-2 px-3">פעולות</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-slate-800">
@@ -168,14 +183,39 @@ async function exportCsv(): Promise<void> {
           </td>
           <td class="py-2 px-3 text-slate-400">{{ statusLabel(inv.status) }}</td>
           <td class="py-2 px-3">
-            <button
-              class="whitespace-nowrap rounded-md border border-slate-700 px-2.5 py-1 text-xs font-medium text-slate-200 transition hover:border-emerald-500 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-700 disabled:hover:text-slate-200"
-              :disabled="!inv.localFilePath"
-              :title="inv.localFilePath ?? 'טרם הורד'"
-              @click="openFile(inv)"
-            >
-              פתיחת קובץ
-            </button>
+            <div class="flex items-center justify-center gap-2">
+              <button
+                class="whitespace-nowrap rounded-md border border-slate-700 px-2.5 py-1 text-xs font-medium text-slate-200 transition hover:border-emerald-500 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-700 disabled:hover:text-slate-200"
+                :disabled="!inv.localFilePath"
+                :title="inv.localFilePath ?? 'טרם הורד'"
+                @click="openFile(inv)"
+              >
+                פתיחת קובץ
+              </button>
+              <button
+                class="rounded-md border border-slate-700 p-1.5 text-slate-300 transition hover:border-red-500 hover:text-red-300"
+                title="מחיקת החשבונית והקובץ"
+                aria-label="מחיקה"
+                @click="removeInvoice(inv)"
+              >
+                <svg
+                  class="h-4 w-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M3 6h18" />
+                  <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
+                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                  <path d="M10 11v6" />
+                  <path d="M14 11v6" />
+                </svg>
+              </button>
+            </div>
           </td>
         </tr>
       </tbody>

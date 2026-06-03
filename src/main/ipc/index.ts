@@ -1,4 +1,4 @@
-import { writeFile } from 'node:fs/promises'
+import { unlink, writeFile } from 'node:fs/promises'
 import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { IpcChannels } from '../../shared/ipc'
 import type {
@@ -9,7 +9,7 @@ import type {
   Settings
 } from '../../shared/types'
 import { sanitizeScanOptions } from '../scan/options'
-import { getInvoiceById, listInvoices } from '../db'
+import { deleteInvoice, getInvoiceById, listInvoices } from '../db'
 import { getAuthStatus, getAuthorizedClient, login, logout } from '../auth'
 import { fetchAttachmentData, fetchEmails } from '../gmail'
 import { toDeterministicInput } from '../gmail/parse'
@@ -62,6 +62,41 @@ export function registerIpcHandlers(): void {
     }
 
     return shell.openPath(invoice.localFilePath)
+  })
+
+  // Delete an invoice: remove its downloaded file from disk AND its DB row.
+  //
+  // SECURITY: like openFile, the renderer sends only the ID. We look up the
+  // path ourselves and only unlink it when it resolves INSIDE an invoices folder
+  // we control — never an arbitrary path. The DB row is always removed.
+  // Returns '' on success, or a readable error.
+  ipcMain.handle(IpcChannels.invoicesDelete, async (_e, invoiceId: number): Promise<string> => {
+    if (typeof invoiceId !== 'number' || !Number.isInteger(invoiceId)) {
+      return 'Invalid invoice id.'
+    }
+    const invoice = getInvoiceById(invoiceId)
+    if (!invoice) return 'Invoice not found.'
+
+    if (invoice.localFilePath) {
+      const allowedDirs = [getEffectiveInvoicesDir(), getInvoicesDir()]
+      if (allowedDirs.some((dir) => isPathInsideDir(dir, invoice.localFilePath!))) {
+        try {
+          await unlink(invoice.localFilePath)
+        } catch (e) {
+          // Already gone is fine; log anything else but still drop the row.
+          if ((e as NodeJS.ErrnoException).code !== 'ENOENT') {
+            console.error(`[delete] failed to remove file for invoice ${invoiceId}:`, e)
+          }
+        }
+      } else {
+        console.error(
+          `[security] refused to delete out-of-bounds file for invoice ${invoiceId}: ${invoice.localFilePath}`
+        )
+      }
+    }
+
+    deleteInvoice(invoiceId)
+    return ''
   })
 
   // --- Auth (REAL — RONY-6) ---

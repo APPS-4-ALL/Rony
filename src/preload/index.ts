@@ -9,7 +9,8 @@ import type { RoniApi, ScanProgress } from '../shared/types'
 const api: RoniApi = {
   invoices: {
     list: () => ipcRenderer.invoke(IpcChannels.invoicesList),
-    openFile: (invoiceId) => ipcRenderer.invoke(IpcChannels.invoicesOpenFile, invoiceId)
+    openFile: (invoiceId) => ipcRenderer.invoke(IpcChannels.invoicesOpenFile, invoiceId),
+    delete: (invoiceId) => ipcRenderer.invoke(IpcChannels.invoicesDelete, invoiceId)
   },
   auth: {
     status: () => ipcRenderer.invoke(IpcChannels.authStatus),

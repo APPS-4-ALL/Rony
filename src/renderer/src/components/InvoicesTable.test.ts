@@ -22,15 +22,23 @@ function inv(over: Partial<Invoice>): Invoice {
 }
 
 const openFile = vi.fn<(id: number) => Promise<string>>()
+const deleteInvoice = vi.fn<(id: number) => Promise<string>>()
 const saveFile = vi.fn<(req: { defaultName: string; content: string }) => Promise<string | null>>()
 
 beforeEach(() => {
   openFile.mockReset()
   openFile.mockResolvedValue('')
+  deleteInvoice.mockReset()
+  deleteInvoice.mockResolvedValue('')
   saveFile.mockReset()
   saveFile.mockResolvedValue('C:/Docs/invoices-2026-06-02.csv')
-  // The component calls window.api.invoices.openFile + window.api.dialog.saveFile.
-  vi.stubGlobal('api', { invoices: { openFile }, dialog: { saveFile } })
+  // Confirm "yes" by default; cancel-path tests override this.
+  vi.stubGlobal(
+    'confirm',
+    vi.fn(() => true)
+  )
+  // The component calls window.api.invoices.openFile/delete + window.api.dialog.saveFile.
+  vi.stubGlobal('api', { invoices: { openFile, delete: deleteInvoice }, dialog: { saveFile } })
 })
 
 afterEach(() => {
@@ -146,5 +154,25 @@ describe('InvoicesTable.vue', () => {
     const wrapper = mount(InvoicesTable, { props: { invoices: [] } })
     const exportBtn = wrapper.findAll('button').find((b) => b.text().includes('ייצוא'))!
     expect((exportBtn.element as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('deletes an invoice after confirming and emits "deleted"', async () => {
+    const wrapper = mount(InvoicesTable, { props: { invoices: [inv({ id: 7 })] } })
+    await wrapper.find('button[aria-label="מחיקה"]').trigger('click')
+    await flushPromises()
+    expect(deleteInvoice).toHaveBeenCalledWith(7)
+    expect(wrapper.emitted('deleted')).toHaveLength(1)
+  })
+
+  it('does not delete (or emit) when the user cancels the confirm', async () => {
+    vi.stubGlobal(
+      'confirm',
+      vi.fn(() => false)
+    )
+    const wrapper = mount(InvoicesTable, { props: { invoices: [inv({ id: 7 })] } })
+    await wrapper.find('button[aria-label="מחיקה"]').trigger('click')
+    await flushPromises()
+    expect(deleteInvoice).not.toHaveBeenCalled()
+    expect(wrapper.emitted('deleted')).toBeUndefined()
   })
 })

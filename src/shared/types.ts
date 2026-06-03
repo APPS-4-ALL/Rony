@@ -129,6 +129,12 @@ export interface RoniApi {
      * Resolves with an empty string on success, or an error message otherwise.
      */
     openFile: (invoiceId: number) => Promise<string>
+    /**
+     * Delete an invoice: removes its row from the DB and its downloaded file
+     * from disk (only if that file lives inside our invoices folder). Takes the
+     * invoice's ID. Resolves with an empty string on success, or an error message.
+     */
+    delete: (invoiceId: number) => Promise<string>
   }
   /** Google OAuth / Gmail connection (RONY-6, RONY-12). */
   auth: {
