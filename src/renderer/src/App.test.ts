@@ -5,16 +5,12 @@ import App from './App.vue'
 import type { Invoice, ScanResult } from '@shared/types'
 
 const list = vi.fn<() => Promise<Invoice[]>>()
-const count = vi.fn<() => Promise<number>>()
 const scanRun = vi.fn<() => Promise<ScanResult>>()
 
 function stubApi(): void {
   vi.stubGlobal('api', {
-    ping: vi.fn().mockResolvedValue('pong'),
     invoices: {
       list,
-      count,
-      addSample: vi.fn(),
       openFile: vi.fn().mockResolvedValue('')
     },
     scan: { run: scanRun, onProgress: vi.fn(() => () => {}) }
@@ -23,7 +19,6 @@ function stubApi(): void {
 
 beforeEach(() => {
   list.mockReset().mockResolvedValue([])
-  count.mockReset().mockResolvedValue(0)
   scanRun.mockReset()
   stubApi()
 })
@@ -43,7 +38,6 @@ describe('App.vue — RONY-14 Scan now', () => {
 
     const wrapper = mount(App)
     await flushPromises() // onMounted refresh
-    expect(count).toHaveBeenCalledTimes(1)
     expect(list).toHaveBeenCalledTimes(1)
 
     await buttonByText(wrapper, 'סרוק עכשיו').trigger('click')

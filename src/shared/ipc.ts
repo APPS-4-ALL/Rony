@@ -4,10 +4,7 @@
  * string drift between the two sides of the boundary.
  */
 export const IpcChannels = {
-  ping: 'app:ping',
   invoicesList: 'invoices:list',
-  invoicesCount: 'invoices:count',
-  invoicesAddSample: 'invoices:addSample',
   invoicesOpenFile: 'invoices:openFile',
   // --- Step-0 contract additions ---
   authStatus: 'auth:status',
@@ -21,7 +18,8 @@ export const IpcChannels = {
   scanRun: 'scan:run',
   /** One-way main → renderer event carrying live scan progress. */
   scanProgress: 'scan:progress',
-  dialogSaveFile: 'dialog:saveFile'
+  dialogSaveFile: 'dialog:saveFile',
+  dialogPickFolder: 'dialog:pickFolder'
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]

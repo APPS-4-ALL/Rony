@@ -9,12 +9,12 @@ import type {
   Settings
 } from '../../shared/types'
 import { sanitizeScanOptions } from '../scan/options'
-import { countInvoices, getInvoiceById, insertInvoice, listInvoices } from '../db'
+import { getInvoiceById, listInvoices } from '../db'
 import { getAuthStatus, getAuthorizedClient, login, logout } from '../auth'
 import { fetchAttachmentData, fetchEmails } from '../gmail'
 import { toDeterministicInput } from '../gmail/parse'
 import { classifyDeterministic } from '../../shared/engines/deterministic'
-import { downloadAndRecord, getInvoicesDir } from '../download'
+import { downloadAndRecord, getEffectiveInvoicesDir, getInvoicesDir } from '../download'
 import { isPathInsideDir } from '../lib/pathSafety'
 import { selectApproved } from '../scan/classify'
 import { classifyWithAI } from '../engines/ai'
@@ -33,23 +33,8 @@ import { isAiProvider } from '../settings/validate'
  * Call once, after the database has been initialised.
  */
 export function registerIpcHandlers(): void {
-  ipcMain.handle(IpcChannels.ping, () => 'pong')
-
   // --- Invoices (real, backed by SQLite) ---
   ipcMain.handle(IpcChannels.invoicesList, () => listInvoices())
-  ipcMain.handle(IpcChannels.invoicesCount, () => countInvoices())
-  ipcMain.handle(IpcChannels.invoicesAddSample, () =>
-    insertInvoice({
-      messageId: `sample-${Date.now()}`,
-      date: new Date().toISOString().slice(0, 10),
-      vendor: 'Sample Vendor Ltd.',
-      amount: Math.round(Math.random() * 100000) / 100,
-      currency: 'ILS',
-      localFilePath: null,
-      status: 'pending',
-      engineType: 'deterministic'
-    })
-  )
   // Open a downloaded invoice with the OS default app (RONY-13 "Open file").
   //
   // SECURITY: the renderer is untrusted, so it sends only the invoice ID — NOT
@@ -65,8 +50,11 @@ export function registerIpcHandlers(): void {
     if (!invoice) return 'Invoice not found.'
     if (!invoice.localFilePath) return 'No file is associated with this invoice yet.'
 
-    // Containment check: the stored path MUST live inside Documents/Rony Invoices.
-    if (!isPathInsideDir(getInvoicesDir(), invoice.localFilePath)) {
+    // Containment check: the stored path MUST live inside an invoices folder we
+    // control — the user's current download folder OR the default (older files
+    // saved before the folder was changed still resolve under the default).
+    const allowedDirs = [getEffectiveInvoicesDir(), getInvoicesDir()]
+    if (!allowedDirs.some((dir) => isPathInsideDir(dir, invoice.localFilePath!))) {
       console.error(
         `[security] refused to open out-of-bounds path for invoice ${invoiceId}: ${invoice.localFilePath}`
       )
@@ -208,4 +196,14 @@ export function registerIpcHandlers(): void {
       return filePath
     }
   )
+
+  // Pick a folder for saved invoice downloads (optional custom download dir).
+  ipcMain.handle(IpcChannels.dialogPickFolder, async (event): Promise<string | null> => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const { canceled, filePaths } = win
+      ? await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'] })
+      : await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] })
+    if (canceled || filePaths.length === 0) return null
+    return filePaths[0]
+  })
 }

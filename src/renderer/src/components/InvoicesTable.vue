@@ -27,13 +27,13 @@ const columns: ReadonlyArray<{ key: SortKey; label: string }> = [
   { key: 'date', label: 'תאריך' },
   { key: 'vendor', label: 'ספק' },
   { key: 'amount', label: 'סכום' },
-  { key: 'engineType', label: 'זוהה על-ידי' },
+  { key: 'engineType', label: 'סוג סריקה' },
   { key: 'status', label: 'סטטוס' }
 ]
 
 /** Hebrew label for which engine catalogued a row. */
 function engineLabel(engine: Invoice['engineType']): string {
-  return engine === 'ai' ? 'בינה מלאכותית' : 'דטרמיניסטי'
+  return engine === 'ai' ? 'חכמה' : 'רגילה'
 }
 
 /** Hebrew label for an invoice's processing status. */
@@ -134,29 +134,29 @@ async function exportCsv(): Promise<void> {
       אין חשבוניות התואמות ל“{{ search }}”.
     </div>
 
-    <table v-else class="mt-4 w-full text-start text-sm">
+    <table v-else class="mt-4 w-full text-center text-sm">
       <thead class="text-xs uppercase tracking-wide text-slate-500">
         <tr>
           <th
             v-for="col in columns"
             :key="col.key"
-            class="cursor-pointer select-none py-2 pe-4 hover:text-slate-200"
+            class="cursor-pointer select-none py-2 px-3 hover:text-slate-200"
             @click="toggleSort(col.key)"
           >
             {{ col.label }}
             <span class="text-emerald-400">{{ sortIndicator(col.key) }}</span>
           </th>
-          <th class="py-2">קובץ</th>
+          <th class="py-2 px-3">קובץ</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-slate-800">
         <tr v-for="inv in rows" :key="inv.id" class="hover:bg-slate-800/40">
-          <td class="py-2 pe-4 text-slate-400">{{ formatDate(inv.date) }}</td>
-          <td class="py-2 pe-4">{{ inv.vendor ?? '—' }}</td>
-          <td class="py-2 pe-4 font-mono">{{ formatAmount(inv.amount, inv.currency) }}</td>
-          <td class="py-2 pe-4">
+          <td class="whitespace-nowrap py-2 px-3 text-slate-400">{{ formatDate(inv.date) }}</td>
+          <td class="py-2 px-3">{{ inv.vendor ?? '—' }}</td>
+          <td class="py-2 px-3 font-mono">{{ formatAmount(inv.amount, inv.currency) }}</td>
+          <td class="py-2 px-3">
             <span
-              class="rounded-full px-2 py-0.5 text-xs font-medium"
+              class="inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium"
               :class="
                 inv.engineType === 'ai'
                   ? 'bg-violet-500/15 text-violet-300'
@@ -166,10 +166,10 @@ async function exportCsv(): Promise<void> {
               {{ engineLabel(inv.engineType) }}
             </span>
           </td>
-          <td class="py-2 pe-4 text-slate-400">{{ statusLabel(inv.status) }}</td>
-          <td class="py-2">
+          <td class="py-2 px-3 text-slate-400">{{ statusLabel(inv.status) }}</td>
+          <td class="py-2 px-3">
             <button
-              class="rounded-md border border-slate-700 px-2.5 py-1 text-xs font-medium text-slate-200 transition hover:border-emerald-500 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-700 disabled:hover:text-slate-200"
+              class="whitespace-nowrap rounded-md border border-slate-700 px-2.5 py-1 text-xs font-medium text-slate-200 transition hover:border-emerald-500 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-700 disabled:hover:text-slate-200"
               :disabled="!inv.localFilePath"
               :title="inv.localFilePath ?? 'טרם הורד'"
               @click="openFile(inv)"

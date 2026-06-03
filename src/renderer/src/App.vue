@@ -14,11 +14,7 @@ const tabs = [
   { key: 'settings', label: 'הגדרות' }
 ] as const
 
-const pingResult = ref<string>('')
 const invoices = ref<Invoice[]>([])
-const count = ref<number>(0)
-const busy = ref(false)
-const error = ref<string>('')
 
 // --- RONY-14 + scan robustness: Scan now, live progress ---
 const scanning = ref(false)
@@ -63,32 +59,8 @@ async function onScan(): Promise<void> {
 }
 
 async function refresh(): Promise<void> {
-  count.value = await window.api.invoices.count()
   invoices.value = await window.api.invoices.list()
 }
-
-async function withGuard(fn: () => Promise<void>): Promise<void> {
-  busy.value = true
-  error.value = ''
-  try {
-    await fn()
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : String(e)
-  } finally {
-    busy.value = false
-  }
-}
-
-const onPing = (): Promise<void> =>
-  withGuard(async () => {
-    pingResult.value = await window.api.ping()
-  })
-
-const onAddSample = (): Promise<void> =>
-  withGuard(async () => {
-    await window.api.invoices.addSample()
-    await refresh()
-  })
 
 let unsubscribeProgress: (() => void) | null = null
 /** Subscribe to live progress, then load the table. */
@@ -96,21 +68,31 @@ onMounted(() => {
   unsubscribeProgress = window.api.scan.onProgress((p) => {
     scanProgress.value = p
   })
-  void withGuard(refresh)
+  refresh().catch((e) => console.error('Failed to load invoices:', e))
 })
 onUnmounted(() => unsubscribeProgress?.())
 </script>
 
 <template>
   <div class="min-h-full bg-slate-950 text-slate-100">
-    <div class="mx-auto max-w-3xl px-6 py-10">
+    <div class="mx-auto max-w-5xl px-6 py-10">
       <!-- Header -->
-      <header class="mb-8">
-        <p class="text-sm font-semibold uppercase tracking-widest text-emerald-400">
-          רוני · מבוסס-מקומי
-        </p>
-        <h1 class="mt-1 text-3xl font-bold">סורק חשבוניות וקבלות</h1>
-        <p class="mt-2 text-slate-400">
+      <header class="mb-10">
+        <div class="flex items-center gap-3">
+          <div
+            class="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-600 text-2xl font-black text-slate-950 shadow-lg shadow-emerald-500/20"
+          >
+            ר
+          </div>
+          <div>
+            <p class="text-lg font-bold leading-none text-slate-100">רוני</p>
+            <p class="mt-1 text-xs font-medium tracking-wide text-emerald-400">
+              כל החשבוניות שלך במקום אחד
+            </p>
+          </div>
+        </div>
+        <h1 class="mt-6 text-4xl font-bold tracking-tight text-slate-50">סורק חשבוניות וקבלות</h1>
+        <p class="mt-3 max-w-2xl text-slate-400">
           סורק את ה-Gmail שלך לאיתור חשבוניות וקבלות, מוריד אותן למחשב ומרכז את כולן בלוח בקרה אחד.
         </p>
       </header>
@@ -137,64 +119,6 @@ onUnmounted(() => unsubscribeProgress?.())
       </template>
 
       <template v-else>
-        <!-- Stack badges -->
-        <div class="mb-8 flex flex-wrap gap-2">
-          <span
-            v-for="tech in ['Electron', 'Vue 3', 'Vite', 'TypeScript', 'TailwindCSS', 'SQLite']"
-            :key="tech"
-            class="rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs font-medium text-slate-300"
-          >
-            {{ tech }}
-          </span>
-        </div>
-
-        <!-- Backend self-check: exercises IPC (RONY-4) + SQLite (RONY-3) -->
-        <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
-          <h2 class="text-lg font-semibold">תקשורת עם השרת</h2>
-          <p class="mt-1 text-sm text-slate-400">
-            הכפתורים האלה קוראים לתהליך הראשי של Electron דרך גשר IPC מאובטח, שקורא וכותב למסד
-            הנתונים המקומי (SQLite).
-          </p>
-
-          <div class="mt-4 flex flex-wrap items-center gap-3">
-            <button
-              class="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-50"
-              :disabled="busy"
-              @click="onPing"
-            >
-              בדיקת תקשורת
-            </button>
-            <span v-if="pingResult" class="text-sm text-emerald-400">
-              תשובת השרת: <code class="font-mono">{{ pingResult }}</code>
-            </span>
-          </div>
-
-          <div class="mt-4 flex flex-wrap items-center gap-3">
-            <button
-              class="rounded-lg bg-slate-700 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-slate-600 disabled:opacity-50"
-              :disabled="busy"
-              @click="onAddSample"
-            >
-              הוספת חשבונית לדוגמה
-            </button>
-            <button
-              class="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-emerald-500 hover:text-emerald-300 disabled:opacity-50"
-              :disabled="busy"
-              @click="() => withGuard(refresh)"
-            >
-              רענון
-            </button>
-            <span class="text-sm text-slate-400">
-              שורות במסד הנתונים המקומי:
-              <span class="font-semibold text-slate-100">{{ count }}</span>
-            </span>
-          </div>
-
-          <p v-if="error" class="mt-4 rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">
-            {{ error }}
-          </p>
-        </section>
-
         <!-- Scan now (RONY-14) — triggers the Gmail sync pipeline over IPC -->
         <section class="mt-6 rounded-xl border border-slate-800 bg-slate-900/60 p-6">
           <div class="flex flex-wrap items-center justify-between gap-4">

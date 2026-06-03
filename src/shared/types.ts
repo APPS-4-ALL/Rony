@@ -54,6 +54,11 @@ export interface Settings {
   defaultEngine: EngineType
   /** Which AI provider the AI engine uses when `defaultEngine` is 'ai' (RONY-16). */
   aiProvider: AiProvider
+  /**
+   * Optional custom folder to save downloaded invoice files into. `null` means
+   * use the default (`Documents/Rony Invoices`).
+   */
+  downloadDir: string | null
 }
 
 /**
@@ -113,15 +118,9 @@ export interface SaveFileRequest {
  * Every method is asynchronous (it crosses the IPC boundary into the main process).
  */
 export interface RoniApi {
-  /** Simple connectivity check — returns 'pong'. Used by the RONY-4 DoD button. */
-  ping: () => Promise<string>
   invoices: {
     /** Return all invoices, newest first. */
     list: () => Promise<Invoice[]>
-    /** Return the total invoice count. */
-    count: () => Promise<number>
-    /** Insert a row and return it — used to demonstrate the DB write/read round-trip. */
-    addSample: () => Promise<Invoice>
     /**
      * Open a downloaded invoice file with the OS default app (RONY-13 "Open
      * file" button). Takes the invoice's ID — NOT a path: the main process
@@ -172,5 +171,7 @@ export interface RoniApi {
   dialog: {
     /** Open a "save as" dialog and write `content`; returns the path, or null if cancelled. */
     saveFile: (req: SaveFileRequest) => Promise<string | null>
+    /** Open a "choose folder" dialog; returns the selected folder path, or null if cancelled. */
+    pickFolder: () => Promise<string | null>
   }
 }

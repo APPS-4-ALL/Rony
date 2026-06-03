@@ -6,7 +6,8 @@ import { connectionDisplay, ENGINE_OPTIONS, PROVIDER_OPTIONS } from '../lib/sett
 const status = ref<AuthStatus>({ connected: false, email: null })
 const settings = ref<Settings>({
   defaultEngine: 'deterministic',
-  aiProvider: 'openai'
+  aiProvider: 'openai',
+  downloadDir: null
 })
 const busy = ref(false)
 const error = ref('')
@@ -23,7 +24,7 @@ const providerLabel = computed(
 
 /** Hebrew label for an engine option. */
 function engineLabel(v: EngineType): string {
-  return v === 'ai' ? 'בינה מלאכותית (מתקדם)' : 'דטרמיניסטי'
+  return v === 'ai' ? 'סריקה חכמה' : 'סריקה רגילה'
 }
 
 /** Hebrew description for an engine option. */
@@ -76,6 +77,19 @@ const selectProvider = (provider: AiProvider): Promise<void> =>
     settings.value = await window.api.settings.set({ aiProvider: provider })
     apiKeyInput.value = ''
     await refreshKeyStatus()
+  })
+
+/** Open the OS folder picker and save the chosen download folder (optional). */
+const chooseFolder = (): Promise<void> =>
+  guarded(async () => {
+    const dir = await window.api.dialog.pickFolder()
+    if (dir) settings.value = await window.api.settings.set({ downloadDir: dir })
+  })
+
+/** Clear the custom folder → fall back to the default Documents folder. */
+const resetFolder = (): Promise<void> =>
+  guarded(async () => {
+    settings.value = await window.api.settings.set({ downloadDir: null })
   })
 
 const saveApiKey = (): Promise<void> =>
@@ -136,6 +150,40 @@ onMounted(() => guarded(load))
       <p v-if="!conn.connected && busy" class="mt-3 text-sm text-slate-400">
         נפתח חלון דפדפן — אשר/י שם את הגישה כדי להשלים את ההתחברות.
       </p>
+    </section>
+
+    <!-- Download folder (optional) -->
+    <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
+      <h2 class="text-lg font-semibold">תיקיית הורדות</h2>
+      <p class="mt-1 text-sm text-slate-400">
+        היכן לשמור את קובצי החשבוניות שיורדו. אופציונלי — כברירת מחדל הם נשמרים בתיקיית המסמכים.
+      </p>
+
+      <p class="mt-4 text-sm">
+        <span class="text-slate-400">תיקייה נוכחית: </span>
+        <code v-if="settings.downloadDir" class="font-mono text-slate-100" dir="ltr">{{
+          settings.downloadDir
+        }}</code>
+        <span v-else class="text-slate-300">ברירת מחדל (תיקיית המסמכים)</span>
+      </p>
+
+      <div class="mt-3 flex flex-wrap items-center gap-2">
+        <button
+          class="rounded-lg bg-emerald-500 px-4 py-1.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-50"
+          :disabled="busy"
+          @click="chooseFolder"
+        >
+          בחירת תיקייה
+        </button>
+        <button
+          v-if="settings.downloadDir"
+          class="rounded-lg border border-slate-700 px-3 py-1.5 text-sm font-medium text-slate-200 transition hover:border-red-500 hover:text-red-300 disabled:opacity-50"
+          :disabled="busy"
+          @click="resetFolder"
+        >
+          איפוס לברירת מחדל
+        </button>
+      </div>
     </section>
 
     <!-- Default scan engine -->

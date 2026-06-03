@@ -7,16 +7,18 @@
  */
 import { getSetting, setSetting } from '../db'
 import type { Settings } from '../../shared/types'
-import { coerceAiProvider, coerceDefaultEngine } from './validate'
+import { coerceAiProvider, coerceDefaultEngine, coerceDownloadDir } from './validate'
 
 const KEY_DEFAULT_ENGINE = 'defaultEngine'
 const KEY_AI_PROVIDER = 'aiProvider'
+const KEY_DOWNLOAD_DIR = 'downloadDir'
 
 /** Read the current settings, applying defaults for anything unset/invalid. */
 export function getSettings(): Settings {
   return {
     defaultEngine: coerceDefaultEngine(getSetting(KEY_DEFAULT_ENGINE)),
-    aiProvider: coerceAiProvider(getSetting(KEY_AI_PROVIDER))
+    aiProvider: coerceAiProvider(getSetting(KEY_AI_PROVIDER)),
+    downloadDir: coerceDownloadDir(getSetting(KEY_DOWNLOAD_DIR))
   }
 }
 
@@ -27,6 +29,10 @@ export function updateSettings(patch: Partial<Settings>): Settings {
   }
   if (patch.aiProvider !== undefined) {
     setSetting(KEY_AI_PROVIDER, coerceAiProvider(patch.aiProvider))
+  }
+  if (patch.downloadDir !== undefined) {
+    // Store '' to mean "default"; coerceDownloadDir maps it back to null on read.
+    setSetting(KEY_DOWNLOAD_DIR, coerceDownloadDir(patch.downloadDir) ?? '')
   }
   return getSettings()
 }
