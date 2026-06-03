@@ -14,6 +14,7 @@
  */
 import type { OAuth2Client } from 'google-auth-library'
 import { getAuthorizedClient } from '../auth'
+import { backoffMs, isTransientStatus } from './retry'
 import {
   buildSearchQuery,
   isPdfOrImage,
@@ -54,6 +55,25 @@ const DEFAULT_WINDOW = '1y'
 const DEFAULT_MAX_RESULTS = 50
 /** How many message fetches to run at once (politeness + memory bound). */
 const FETCH_CONCURRENCY = 5
+/** Max retries for a transient (429 / 5xx) Gmail API error. */
+const MAX_RETRIES = 4
+
+/**
+ * Call the Gmail API with exponential back-off on transient errors (HTTP 429
+ * rate-limit and 5xx). Non-transient errors (auth, 404…) propagate immediately.
+ */
+async function requestWithRetry<T>(client: OAuth2Client, url: string): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const { data } = await client.request<T>({ url })
+      return data
+    } catch (e) {
+      const status = (e as { response?: { status?: number } })?.response?.status
+      if (!isTransientStatus(status) || attempt >= MAX_RETRIES) throw e
+      await new Promise((resolve) => setTimeout(resolve, backoffMs(attempt)))
+    }
+  }
+}
 
 interface MessageListResponse {
   messages?: Array<{ id: string; threadId: string }>
@@ -79,9 +99,10 @@ export async function listMessageIds(
     params.set('maxResults', String(Math.min(500, maxResults - ids.length)))
     if (pageToken) params.set('pageToken', pageToken)
 
-    const { data } = await client.request<MessageListResponse>({
-      url: `${GMAIL_API}/messages?${params.toString()}`
-    })
+    const data = await requestWithRetry<MessageListResponse>(
+      client,
+      `${GMAIL_API}/messages?${params.toString()}`
+    )
 
     for (const m of data.messages ?? []) ids.push(m.id)
     if (!data.nextPageToken) break
@@ -93,10 +114,10 @@ export async function listMessageIds(
 
 /** Fetch one message in full (headers + body parts + attachment metadata). */
 export async function getMessage(client: OAuth2Client, id: string): Promise<GmailMessage> {
-  const { data } = await client.request<GmailMessage>({
-    url: `${GMAIL_API}/messages/${encodeURIComponent(id)}?format=full`
-  })
-  return data
+  return requestWithRetry<GmailMessage>(
+    client,
+    `${GMAIL_API}/messages/${encodeURIComponent(id)}?format=full`
+  )
 }
 
 interface AttachmentResponse {
@@ -114,9 +135,10 @@ export async function fetchAttachmentData(
   messageId: string,
   attachmentId: string
 ): Promise<Buffer> {
-  const { data } = await client.request<AttachmentResponse>({
-    url: `${GMAIL_API}/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`
-  })
+  const data = await requestWithRetry<AttachmentResponse>(
+    client,
+    `${GMAIL_API}/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`
+  )
   if (!data.data) throw new Error(`Gmail attachment ${attachmentId} returned no data.`)
   return Buffer.from(data.data, 'base64url')
 }
@@ -126,6 +148,8 @@ export interface FetchResult {
   emails: ParsedEmail[]
   /** Messages that failed to fetch/parse (non-fatal — the run still completes). */
   errors: number
+  /** A representative error message (the first failure), for the UI. */
+  firstError?: string
 }
 
 /** Run `tasks` with a fixed concurrency, preserving input order in the output. */
@@ -170,11 +194,13 @@ export async function fetchEmails(options: FetchOptions = {}): Promise<FetchResu
   const ids = await listMessageIds(client, query, maxResults)
 
   let errors = 0
+  let firstError: string | undefined
   const parsed = await mapWithConcurrency(ids, FETCH_CONCURRENCY, async (id) => {
     try {
       return parseMessage(await getMessage(client, id))
     } catch (e) {
       errors++
+      if (!firstError) firstError = e instanceof Error ? e.message : String(e)
       console.error(`[gmail] failed to fetch/parse message ${id}:`, e)
       return null
     }
@@ -191,5 +217,5 @@ export async function fetchEmails(options: FetchOptions = {}): Promise<FetchResu
     emails.push({ ...email, attachments })
   }
 
-  return { emails, errors }
+  return { emails, errors, firstError }
 }

@@ -17,7 +17,7 @@ function stubApi(): void {
       addSample: vi.fn(),
       openFile: vi.fn().mockResolvedValue('')
     },
-    scan: { run: scanRun }
+    scan: { run: scanRun, onProgress: vi.fn(() => () => {}) }
   })
 }
 

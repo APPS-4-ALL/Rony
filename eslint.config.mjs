@@ -36,5 +36,12 @@ export default defineConfig(
       ]
     }
   },
+  {
+    // Plain-JS files (dev scripts) can't carry TS type annotations.
+    files: ['**/*.{js,mjs,cjs}'],
+    rules: {
+      '@typescript-eslint/explicit-function-return-type': 'off'
+    }
+  },
   eslintConfigPrettier
 )

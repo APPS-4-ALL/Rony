@@ -1,7 +1,13 @@
 import { writeFile } from 'node:fs/promises'
 import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { IpcChannels } from '../../shared/ipc'
-import type { AiProvider, SaveFileRequest, ScanResult, Settings } from '../../shared/types'
+import type {
+  AiProvider,
+  SaveFileRequest,
+  ScanProgress,
+  ScanResult,
+  Settings
+} from '../../shared/types'
 import { countInvoices, getInvoiceById, insertInvoice, listInvoices } from '../db'
 import { getAuthStatus, login, logout } from '../auth'
 import { fetchEmails } from '../gmail'
@@ -97,7 +103,11 @@ export function registerIpcHandlers(): void {
   // selected in settings (RONY-9 deterministic OR RONY-10 AI), then download the
   // matched emails' PDF/image attachments and record them in SQLite (RONY-11).
   // Triggered by the RONY-14 "Scan now" button.
-  ipcMain.handle(IpcChannels.scanRun, async (): Promise<ScanResult> => {
+  ipcMain.handle(IpcChannels.scanRun, async (event): Promise<ScanResult> => {
+    const sendProgress = (progress: ScanProgress): void => {
+      if (!event.sender.isDestroyed()) event.sender.send(IpcChannels.scanProgress, progress)
+    }
+
     // Use the user's persisted engine + provider choice (RONY-12/16).
     const { defaultEngine: engine, aiProvider } = getSettings()
 
@@ -106,28 +116,51 @@ export function registerIpcHandlers(): void {
     const aiApiKey = engine === 'ai' ? getApiKey(aiProvider) : undefined
     if (engine === 'ai' && !aiApiKey) getProviderConfig(aiProvider)
 
-    const { emails, errors: fetchErrors } = await fetchEmails()
+    sendProgress({ phase: 'fetching', processed: 0, total: 0, matched: 0, downloaded: 0 })
+    const { emails, errors: fetchErrors, firstError: fetchFirstError } = await fetchEmails()
 
-    const { approved, errors: classifyErrors } = await selectApproved(emails, engine, {
-      deterministic: (email) => classifyDeterministic(toDeterministicInput(email)).isInvoice,
-      ai: (email) =>
-        classifyWithAI(
-          {
-            subject: email.subject,
-            body: email.bodyText,
-            from: email.from,
-            filenames: email.attachments.map((a) => a.filename)
-          },
-          { provider: aiProvider, apiKey: aiApiKey }
-        )
+    const {
+      approved,
+      errors: classifyErrors,
+      firstError: classifyFirstError
+    } = await selectApproved(
+      emails,
+      engine,
+      {
+        deterministic: (email) => classifyDeterministic(toDeterministicInput(email)).isInvoice,
+        ai: (email) =>
+          classifyWithAI(
+            {
+              subject: email.subject,
+              body: email.bodyText,
+              from: email.from,
+              filenames: email.attachments.map((a) => a.filename)
+            },
+            { provider: aiProvider, apiKey: aiApiKey }
+          )
+      },
+      (processed, total, matched) =>
+        sendProgress({ phase: 'classifying', processed, total, matched, downloaded: 0 })
+    )
+
+    const matched = approved.length
+    const download = await downloadAndRecord(approved, (processed, total) =>
+      sendProgress({ phase: 'downloading', processed, total, matched, downloaded: processed })
+    )
+
+    sendProgress({
+      phase: 'done',
+      processed: emails.length,
+      total: emails.length,
+      matched,
+      downloaded: download.downloaded
     })
-
-    const download = await downloadAndRecord(approved)
     return {
       scanned: emails.length,
-      matched: approved.length,
+      matched,
       downloaded: download.downloaded,
-      errors: fetchErrors + classifyErrors + download.errors
+      errors: fetchErrors + classifyErrors + download.errors,
+      errorSample: fetchFirstError ?? classifyFirstError ?? download.firstError
     }
   })
 
