@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { MAX_VISION_BYTES, isVisionSupported, pickInvoiceAttachment } from './attachments'
+import {
+  MAX_VISION_BYTES,
+  isVisionSupported,
+  pickInvoiceAttachment,
+  visionMimeType
+} from './attachments'
 import type { GmailAttachmentRef } from '../../gmail/parse'
 
 function att(over: Partial<GmailAttachmentRef> = {}): GmailAttachmentRef {
@@ -12,13 +17,43 @@ function att(over: Partial<GmailAttachmentRef> = {}): GmailAttachmentRef {
   }
 }
 
+describe('visionMimeType', () => {
+  it('trusts real PDF/image MIME types', () => {
+    expect(visionMimeType(att({ mimeType: 'application/pdf' }))).toBe('application/pdf')
+    expect(visionMimeType(att({ mimeType: 'image/png', filename: 'x.png' }))).toBe('image/png')
+    expect(visionMimeType(att({ mimeType: 'IMAGE/JPEG', filename: 'x.jpg' }))).toBe('image/jpeg')
+  })
+
+  it('recovers the type from the extension when a sender mislabels the part', () => {
+    // The HashDoc.pdf case: a real PDF attached as application/octet-stream.
+    expect(
+      visionMimeType(att({ mimeType: 'application/octet-stream', filename: 'HashDoc.pdf' }))
+    ).toBe('application/pdf')
+    expect(
+      visionMimeType(att({ mimeType: 'application/octet-stream', filename: 'scan.JPG' }))
+    ).toBe('image/jpeg')
+  })
+
+  it('returns null for genuinely unsupported types', () => {
+    expect(visionMimeType(att({ mimeType: 'text/plain', filename: 'a.txt' }))).toBeNull()
+    expect(
+      visionMimeType(att({ mimeType: 'application/octet-stream', filename: 'a.docx' }))
+    ).toBeNull()
+  })
+})
+
 describe('isVisionSupported', () => {
-  it('accepts PDFs and images, rejects others', () => {
-    expect(isVisionSupported('application/pdf')).toBe(true)
-    expect(isVisionSupported('image/png')).toBe(true)
-    expect(isVisionSupported('IMAGE/JPEG')).toBe(true)
-    expect(isVisionSupported('text/plain')).toBe(false)
-    expect(isVisionSupported('application/octet-stream')).toBe(false)
+  it('accepts PDFs and images (by MIME or extension), rejects others', () => {
+    expect(isVisionSupported(att({ mimeType: 'application/pdf' }))).toBe(true)
+    expect(isVisionSupported(att({ mimeType: 'image/png', filename: 'a.png' }))).toBe(true)
+    // Mislabeled but really a PDF → still supported.
+    expect(
+      isVisionSupported(att({ mimeType: 'application/octet-stream', filename: 'a.pdf' }))
+    ).toBe(true)
+    expect(isVisionSupported(att({ mimeType: 'text/plain', filename: 'a.txt' }))).toBe(false)
+    expect(
+      isVisionSupported(att({ mimeType: 'application/octet-stream', filename: 'a.bin' }))
+    ).toBe(false)
   })
 })
 
@@ -38,6 +73,11 @@ describe('pickInvoiceAttachment', () => {
     expect(pickInvoiceAttachment([img, pdf])).toBe(pdf)
   })
 
+  it('picks a PDF even when it is mislabeled as octet-stream', () => {
+    const mislabeled = att({ filename: 'HashDoc.pdf', mimeType: 'application/octet-stream' })
+    expect(pickInvoiceAttachment([mislabeled])).toBe(mislabeled)
+  })
+
   it('falls back to the largest image when there is no PDF', () => {
     const small = att({ filename: 's.png', mimeType: 'image/png', attachmentId: 's', size: 10_000 })
     const big = att({ filename: 'b.jpg', mimeType: 'image/jpeg', attachmentId: 'b', size: 500_000 })
@@ -49,7 +89,7 @@ describe('pickInvoiceAttachment', () => {
     expect(pickInvoiceAttachment([inline])).toBeNull()
   })
 
-  it('skips unsupported MIME types', () => {
+  it('skips genuinely unsupported types', () => {
     const docx = att({
       filename: 'x.docx',
       mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
