@@ -92,14 +92,14 @@ export function insertInvoice(invoice: NewInvoice): Invoice {
 }
 
 export function getInvoiceById(id: number): Invoice | undefined {
-  const row = getDb().prepare('SELECT * FROM invoices WHERE id = ?').get(id) as InvoiceRow | undefined
+  const row = getDb().prepare('SELECT * FROM invoices WHERE id = ?').get(id) as
+    | InvoiceRow
+    | undefined
   return row ? rowToInvoice(row) : undefined
 }
 
 export function listInvoices(): Invoice[] {
-  const rows = getDb()
-    .prepare('SELECT * FROM invoices ORDER BY id DESC')
-    .all() as InvoiceRow[]
+  const rows = getDb().prepare('SELECT * FROM invoices ORDER BY id DESC').all() as InvoiceRow[]
   return rows.map(rowToInvoice)
 }
 

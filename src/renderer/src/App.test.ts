@@ -23,7 +23,7 @@ function stubApi(): void {
         .fn()
         .mockResolvedValue({ defaultEngine: 'deterministic', aiProvider: 'openai', locale: 'en' })
     },
-    scan: { run: scanRun }
+    scan: { run: scanRun, onProgress: vi.fn(() => () => {}) }
   })
 }
 

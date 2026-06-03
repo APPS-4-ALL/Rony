@@ -50,6 +50,8 @@ export interface DownloadSummary {
   skipped: number
   /** Per-attachment failures (non-fatal — the run continues). */
   errors: number
+  /** A representative error message (the first failure), for the UI. */
+  firstError?: string
 }
 
 /**
@@ -126,7 +128,8 @@ async function runWithConcurrency<T>(
  */
 export async function downloadApproved(
   approved: ApprovedEmail[],
-  deps: DownloadDeps
+  deps: DownloadDeps,
+  onProgress?: (processed: number, total: number) => void
 ): Promise<DownloadSummary> {
   const summary: DownloadSummary = { downloaded: 0, skipped: 0, errors: 0 }
   await mkdir(deps.targetDir, { recursive: true })
@@ -162,6 +165,7 @@ export async function downloadApproved(
     })
   }
 
+  let processed = 0
   await runWithConcurrency(tasks, DOWNLOAD_CONCURRENCY, async (task) => {
     try {
       const recorded = deps.store.existsByPath(task.targetPath)
@@ -184,7 +188,10 @@ export async function downloadApproved(
       else summary.skipped++
     } catch (e) {
       summary.errors++
+      summary.firstError ??= e instanceof Error ? e.message : String(e)
       console.error(`[download] failed for ${task.messageId} / ${task.filename}:`, e)
+    } finally {
+      onProgress?.(++processed, tasks.length)
     }
   })
 

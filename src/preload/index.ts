@@ -1,7 +1,7 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { IpcChannels } from '../shared/ipc'
-import type { RoniApi } from '../shared/types'
+import type { RoniApi, ScanProgress } from '../shared/types'
 
 // Custom, typed API exposed to the renderer. Each method forwards to a
 // main-process `ipcMain.handle` channel via `ipcRenderer.invoke`, so the
@@ -27,7 +27,14 @@ const api: RoniApi = {
     clearApiKey: (provider) => ipcRenderer.invoke(IpcChannels.settingsClearApiKey, provider)
   },
   scan: {
-    run: (opts) => ipcRenderer.invoke(IpcChannels.scanRun, opts)
+    run: (opts) => ipcRenderer.invoke(IpcChannels.scanRun, opts),
+    onProgress: (callback) => {
+      const listener = (_e: IpcRendererEvent, progress: ScanProgress): void => callback(progress)
+      ipcRenderer.on(IpcChannels.scanProgress, listener)
+      return () => {
+        ipcRenderer.removeListener(IpcChannels.scanProgress, listener)
+      }
+    }
   },
   dialog: {
     saveFile: (req) => ipcRenderer.invoke(IpcChannels.dialogSaveFile, req)

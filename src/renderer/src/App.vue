@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import type { Invoice, ScanOptions, ScanResult } from '@shared/types'
+import { onMounted, onUnmounted, ref } from 'vue'
+import type { Invoice, ScanOptions, ScanProgress, ScanResult } from '@shared/types'
 import InvoicesTable from './components/InvoicesTable.vue'
 import SettingsView from './components/SettingsView.vue'
 import { useI18n } from './lib/useI18n'
+import { progressLabel } from './lib/scanControls'
 
 const { t, locale, setLocale } = useI18n()
 
@@ -21,10 +22,11 @@ const count = ref<number>(0)
 const busy = ref(false)
 const error = ref<string>('')
 
-// --- RONY-14: Scan now ---
+// --- RONY-14 + scan robustness: Scan now, live progress ---
 const scanning = ref(false)
 const scanSummary = ref<ScanResult | null>(null)
 const scanError = ref<string>('')
+const scanProgress = ref<ScanProgress | null>(null)
 
 // Per-run scan controls (count + optional date range). Empty dates → the
 // engine's default 1-year look-back; the main process re-validates these.
@@ -42,15 +44,15 @@ function scanOptions(): ScanOptions {
 }
 
 /**
- * Run a Gmail scan in the background (RONY-14). Shows a loading state, then
- * refreshes the table from SQLite on completion. Errors are surfaced inline so
- * the UI never crashes (e.g. "not connected" or "AI key not configured").
+ * Run a Gmail scan. Shows live progress, then refreshes the table on
+ * completion. Errors surface inline (the UI never crashes).
  */
 async function onScan(): Promise<void> {
   if (scanning.value) return
   scanning.value = true
   scanError.value = ''
   scanSummary.value = null
+  scanProgress.value = null
   try {
     scanSummary.value = await window.api.scan.run(scanOptions())
     await refresh()
@@ -58,6 +60,7 @@ async function onScan(): Promise<void> {
     scanError.value = e instanceof Error ? e.message : String(e)
   } finally {
     scanning.value = false
+    scanProgress.value = null
   }
 }
 
@@ -89,14 +92,19 @@ const onAddSample = (): Promise<void> =>
     await refresh()
   })
 
-/** Apply the persisted language as early as possible, then load the table. */
-onMounted(() =>
-  withGuard(async () => {
+let unsubscribeProgress: (() => void) | null = null
+/** Subscribe to live progress, apply the persisted language, then load the table. */
+onMounted(() => {
+  unsubscribeProgress = window.api.scan.onProgress((p) => {
+    scanProgress.value = p
+  })
+  void withGuard(async () => {
     const settings = await window.api.settings.get()
     setLocale(settings.locale)
     await refresh()
   })
-)
+})
+onUnmounted(() => unsubscribeProgress?.())
 </script>
 
 <template>
@@ -267,6 +275,22 @@ onMounted(() =>
           </div>
           <p class="mt-2 text-xs text-slate-500">{{ t('scan.rangeHint') }}</p>
 
+          <!-- Live progress (scan robustness) -->
+          <div v-if="scanning && scanProgress" class="mt-4">
+            <p class="text-sm text-slate-300">{{ progressLabel(scanProgress) }}</p>
+            <div
+              v-if="scanProgress.total > 0"
+              class="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-800"
+            >
+              <div
+                class="h-full bg-emerald-500 transition-all"
+                :style="{
+                  width: `${Math.round((scanProgress.processed / scanProgress.total) * 100)}%`
+                }"
+              />
+            </div>
+          </div>
+
           <p
             v-if="scanSummary"
             class="mt-4 rounded-lg bg-slate-800/60 px-3 py-2 text-sm text-slate-300"
@@ -280,6 +304,12 @@ onMounted(() =>
             <span v-if="scanSummary.errors > 0" class="text-amber-300">
               · {{ t('scan.errors', { count: scanSummary.errors }) }}
             </span>
+          </p>
+          <p
+            v-if="scanSummary && scanSummary.errors > 0 && scanSummary.errorSample"
+            class="mt-2 rounded-lg bg-amber-950/40 px-3 py-2 text-xs text-amber-300"
+          >
+            {{ scanSummary.errorSample }}
           </p>
           <p v-if="scanError" class="mt-4 rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">
             {{ scanError }}

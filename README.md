@@ -10,7 +10,7 @@ Rony connects to your **Gmail API**, automatically parses financial documents us
 
 **Google "Unverified App" screen:** During OAuth sign-in, you will see a Google warning that this app is unverified. This is normal for self-hosted open-source apps. Click "Advanced → Go to Rony (unsafe)" to continue. No data is sent to external servers — only to Google and your local machine.
 
-**Windows SmartScreen:** The installer is unsigned in the MVP phase. Click "More info → Run anyway" to install. 
+**Windows SmartScreen:** The installer is unsigned in the MVP phase. Click "More info → Run anyway" to install.
 
 **AI costs:** If you choose to use the Advanced AI Search route and connect your LLM provider key, usage costs are charged directly to your account by the provider. Rony does not charge anything.
 
@@ -58,16 +58,16 @@ The installer will be generated in your release directory.
 
 ## Tech Stack
 
-| Layer | Choice |
-| --- | --- |
-| Shell | Electron (latest stable) |
-| Build Tool | electron-vite |
-| Language | TypeScript (strict) / JavaScript |
-| UI | Vue 3 (Composition API) |
-| Styling | Tailwind CSS |
-| Database | SQLite (via better-sqlite3) |
-| Google APIs | googleapis + google-auth-library (Gmail API OAuth 2.0) |
-| AI Integration | LLM API Client (Structured JSON Outputs) |
+| Layer          | Choice                                                 |
+| -------------- | ------------------------------------------------------ |
+| Shell          | Electron (latest stable)                               |
+| Build Tool     | electron-vite                                          |
+| Language       | TypeScript (strict) / JavaScript                       |
+| UI             | Vue 3 (Composition API)                                |
+| Styling        | Tailwind CSS                                           |
+| Database       | SQLite (via better-sqlite3)                            |
+| Google APIs    | googleapis + google-auth-library (Gmail API OAuth 2.0) |
+| AI Integration | LLM API Client (Structured JSON Outputs)               |
 
 ---
 

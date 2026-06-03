@@ -26,16 +26,23 @@ export function getInvoicesDir(): string {
  * invoices folder and record each in SQLite. Throws `NotConnectedError` if no
  * Gmail account is connected.
  */
-export async function downloadAndRecord(approved: ApprovedEmail[]): Promise<DownloadSummary> {
+export async function downloadAndRecord(
+  approved: ApprovedEmail[],
+  onProgress?: (processed: number, total: number) => void
+): Promise<DownloadSummary> {
   const client = getAuthorizedClient()
   if (!client) throw new NotConnectedError()
 
-  return downloadApproved(approved, {
-    targetDir: getInvoicesDir(),
-    fetchAttachment: (messageId, attachmentId) =>
-      fetchAttachmentData(client, messageId, attachmentId),
-    store: { existsByPath: invoiceExistsByPath, insert: tryInsertInvoice }
-  })
+  return downloadApproved(
+    approved,
+    {
+      targetDir: getInvoicesDir(),
+      fetchAttachment: (messageId, attachmentId) =>
+        fetchAttachmentData(client, messageId, attachmentId),
+      store: { existsByPath: invoiceExistsByPath, insert: tryInsertInvoice }
+    },
+    onProgress
+  )
 }
 
 export type { ApprovedEmail, DownloadSummary } from './core'

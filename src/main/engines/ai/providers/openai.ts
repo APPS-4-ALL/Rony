@@ -6,6 +6,7 @@
  * + semantic validation is handled centrally by the engine's normalizer.
  */
 import type { ProviderComplete } from '../types'
+import { extractApiError } from './errors'
 
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions'
 
@@ -29,7 +30,7 @@ export const completeOpenAI: ProviderComplete = async ({ system, user, cfg }) =>
 
   if (!res.ok) {
     const detail = await res.text().catch(() => '')
-    throw new Error(`OpenAI API error ${res.status}: ${detail.slice(0, 300)}`)
+    throw new Error(`OpenAI API error ${res.status}: ${extractApiError(detail)}`)
   }
 
   const data = (await res.json()) as {
