@@ -59,6 +59,13 @@ export interface AiResult {
    * spotting hallucinations during debugging. Optional; may be absent.
    */
   reasoning?: string
+  /**
+   * The model's request, on a text-only pass, to ESCALATE: true when it cannot
+   * confidently answer from the email text alone and the attached document
+   * should be read (RONY-10 tiered scan). Present only when true (omitted
+   * otherwise), mirroring `reasoning`.
+   */
+  needsDocument?: boolean
   vendor: string | null
   /**
    * Numeric amount only — a raw float like `1000.5`. The prompt MUST enforce

@@ -151,10 +151,12 @@ export function registerIpcHandlers(): void {
       firstError: fetchFirstError
     } = await fetchEmails(sanitizeScanOptions(rawOpts))
 
-    // RONY-10: give the AI engine the invoice document itself so it can read
-    // fields (notably the TOTAL amount) that live inside the PDF/image rather
-    // than in the email text. We download ONE representative attachment per
-    // email; any failure falls back to text-only classification (never fatal).
+    // RONY-10 tiered scan: the AI engine first classifies each email on the FAST
+    // model using text only, then escalates to the STRONG document-reading model
+    // ONLY when that pass needs the file (e.g. the total amount lives inside the
+    // PDF/image). `loadVisionAttachment` is therefore lazy — it downloads ONE
+    // representative attachment, but only when the engine actually asks for it.
+    // Any fetch failure leaves the fast result in place (never fatal).
     const client = getAuthorizedClient()
     const loadVisionAttachment = async (
       email: (typeof emails)[number]
@@ -186,10 +188,13 @@ export function registerIpcHandlers(): void {
               subject: email.subject,
               body: email.bodyText,
               from: email.from,
-              filenames: email.attachments.map((a) => a.filename),
-              attachments: await loadVisionAttachment(email)
+              filenames: email.attachments.map((a) => a.filename)
             },
-            { provider: aiProvider, apiKey: aiApiKey }
+            {
+              provider: aiProvider,
+              apiKey: aiApiKey,
+              loadAttachments: () => loadVisionAttachment(email)
+            }
           )
       },
       (processed, total, matched) =>
