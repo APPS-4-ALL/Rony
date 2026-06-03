@@ -16,6 +16,7 @@ function inv(over: Partial<Invoice>): Invoice {
     id: 1,
     messageId: null,
     date: '2026-01-01',
+    dateSource: 'email',
     vendor: 'Acme',
     amount: 100,
     currency: 'ILS',

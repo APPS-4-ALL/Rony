@@ -66,6 +66,13 @@ function sortIndicator(key: SortKey): string {
   return sortDir.value === 'asc' ? '▲' : '▼'
 }
 
+/** Tooltip explaining where a row's date came from (empty for legacy rows). */
+function dateSourceTitle(source: Invoice['dateSource']): string {
+  if (source === 'document') return 'תאריך מהחשבונית'
+  if (source === 'email') return 'תאריך קבלת המייל'
+  return ''
+}
+
 const openError = ref('')
 
 /** Open the invoice's local file via the OS (RONY-13 DoD button). We send only
@@ -166,7 +173,43 @@ async function exportCsv(): Promise<void> {
       </thead>
       <tbody class="divide-y divide-slate-800">
         <tr v-for="inv in rows" :key="inv.id" class="hover:bg-slate-800/40">
-          <td class="whitespace-nowrap py-2 px-3 text-slate-400">{{ formatDate(inv.date) }}</td>
+          <td class="whitespace-nowrap py-2 px-3 text-slate-400">
+            <span
+              class="inline-flex items-center justify-center gap-1.5"
+              :title="dateSourceTitle(inv.dateSource)"
+            >
+              {{ formatDate(inv.date) }}
+              <!-- Provenance: 📄 = read off the invoice, ✉️ = the email's date -->
+              <svg
+                v-if="inv.date && inv.dateSource === 'document'"
+                class="h-3.5 w-3.5 text-slate-500"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-label="תאריך מהחשבונית"
+              >
+                <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+                <path d="M14 3v5h5" />
+              </svg>
+              <svg
+                v-else-if="inv.date && inv.dateSource === 'email'"
+                class="h-3.5 w-3.5 text-slate-500"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-label="תאריך קבלת המייל"
+              >
+                <rect x="3" y="5" width="18" height="14" rx="2" />
+                <path d="m3 7 9 6 9-6" />
+              </svg>
+            </span>
+          </td>
           <td class="py-2 px-3">{{ inv.vendor ?? '—' }}</td>
           <td class="py-2 px-3 font-mono">{{ formatAmount(inv.amount, inv.currency) }}</td>
           <td class="py-2 px-3">
