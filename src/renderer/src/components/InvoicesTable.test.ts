@@ -158,8 +158,7 @@ describe('InvoicesTable.vue', () => {
 
   it('deletes an invoice after confirming and emits "deleted"', async () => {
     const wrapper = mount(InvoicesTable, { props: { invoices: [inv({ id: 7 })] } })
-    const delBtn = wrapper.findAll('button').find((b) => b.text().includes('מחיקה'))!
-    await delBtn.trigger('click')
+    await wrapper.find('button[aria-label="מחיקה"]').trigger('click')
     await flushPromises()
     expect(deleteInvoice).toHaveBeenCalledWith(7)
     expect(wrapper.emitted('deleted')).toHaveLength(1)
@@ -171,8 +170,7 @@ describe('InvoicesTable.vue', () => {
       vi.fn(() => false)
     )
     const wrapper = mount(InvoicesTable, { props: { invoices: [inv({ id: 7 })] } })
-    const delBtn = wrapper.findAll('button').find((b) => b.text().includes('מחיקה'))!
-    await delBtn.trigger('click')
+    await wrapper.find('button[aria-label="מחיקה"]').trigger('click')
     await flushPromises()
     expect(deleteInvoice).not.toHaveBeenCalled()
     expect(wrapper.emitted('deleted')).toBeUndefined()

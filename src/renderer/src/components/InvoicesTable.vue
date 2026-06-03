@@ -193,11 +193,27 @@ async function exportCsv(): Promise<void> {
                 פתיחת קובץ
               </button>
               <button
-                class="whitespace-nowrap rounded-md border border-slate-700 px-2.5 py-1 text-xs font-medium text-slate-300 transition hover:border-red-500 hover:text-red-300"
+                class="rounded-md border border-slate-700 p-1.5 text-slate-300 transition hover:border-red-500 hover:text-red-300"
                 title="מחיקת החשבונית והקובץ"
+                aria-label="מחיקה"
                 @click="removeInvoice(inv)"
               >
-                מחיקה
+                <svg
+                  class="h-4 w-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M3 6h18" />
+                  <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
+                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                  <path d="M10 11v6" />
+                  <path d="M14 11v6" />
+                </svg>
               </button>
             </div>
           </td>
