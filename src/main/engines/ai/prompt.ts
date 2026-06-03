@@ -29,6 +29,10 @@ text) with EXACTLY these keys, in this order:
 }
 
 Rules:
+- An image or PDF of the document MAY be attached to this request. When it is,
+  READ IT — the total amount in particular is usually printed on the document
+  itself and is often absent from the email text. Prefer the document's figures
+  over the email body when they disagree.
 - Read the ENTIRE email body before deciding — the relevant details (totals,
   dates, vendor) are often further down, especially in long reply threads.
 - "amount" MUST be a plain number: strip currency symbols (₪, $), thousands

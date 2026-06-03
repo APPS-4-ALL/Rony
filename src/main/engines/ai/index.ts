@@ -49,7 +49,8 @@ export async function classifyWithAI(
   const raw = await complete({
     system: AI_SYSTEM_PROMPT,
     user: buildUserPrompt(input),
-    cfg
+    cfg,
+    attachments: input.attachments
   })
 
   return normalizeAiResult(raw)
