@@ -9,6 +9,7 @@
 import { access, mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isInvoiceDocument, type GmailAttachmentRef, type ParsedEmail } from '../gmail/parse'
+import { cleanReceiptBody } from '../pdf/cleanBody'
 import type { EngineType, NewInvoice } from '../../shared/types'
 
 /** Extracted invoice fields. The AI engine fills these; the deterministic engine leaves them null. */
@@ -122,9 +123,10 @@ function buildInvoice(
     amount: extracted?.amount ?? null,
     currency: extracted?.currency ?? null,
     localFilePath,
-    // Keep the raw body only when there's no file (the fallback path) so the
-    // user can still view it; once a (generated) PDF exists, the body is in it.
-    emailBody: localFilePath ? null : email.bodyText,
+    // Keep the body only when there's no file (the fallback path) so the user
+    // can still view it; once a (generated) PDF exists, the body is in it. We
+    // clean the reply-thread/signature noise either way (see cleanReceiptBody).
+    emailBody: localFilePath ? null : cleanReceiptBody(email.bodyText),
     generated,
     status: 'downloaded',
     engineType
@@ -265,7 +267,7 @@ export async function downloadApproved(
           amount: extracted?.amount ?? null,
           currency: extracted?.currency ?? null,
           date: extracted?.date ?? email.date,
-          body: email.bodyText
+          body: cleanReceiptBody(email.bodyText)
         })
         const targetPath = join(deps.targetDir, `${email.id}__email.pdf`)
         await writeFile(targetPath, pdf)
