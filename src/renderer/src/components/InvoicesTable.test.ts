@@ -16,6 +16,7 @@ function inv(over: Partial<Invoice>): Invoice {
     currency: 'ILS',
     localFilePath: null,
     emailBody: null,
+    generated: false,
     status: 'downloaded',
     engineType: 'deterministic',
     createdAt: '2026-01-01T00:00:00Z',
@@ -245,5 +246,19 @@ describe('InvoicesTable.vue', () => {
     expect(viewBtn).toBeTruthy()
     await viewBtn.trigger('click')
     expect(wrapper.text()).toContain('סך הכל: 64.00 ₪') // body shown in the popup
+  })
+
+  it('shows "הופק מהמייל" and a working open button for a generated-PDF row', () => {
+    const wrapper = mount(InvoicesTable, {
+      props: {
+        invoices: [
+          inv({ id: 1, localFilePath: 'C:/Docs/Rony Invoices/m__email.pdf', generated: true })
+        ]
+      }
+    })
+    expect(wrapper.text()).toContain('הופק מהמייל') // not "הורד", not "מהמייל"
+    const buttons = wrapper.findAll('button')
+    expect(buttons.some((b) => b.text().includes('פתיחת קובץ'))).toBe(true)
+    expect(buttons.some((b) => b.text().includes('הצג מייל'))).toBe(false) // popup not needed
   })
 })

@@ -32,10 +32,15 @@ export interface Invoice {
   /** Absolute path to the downloaded file on the local machine. */
   localFilePath: string | null
   /**
-   * For a body-only receipt (no attachment), the email's plain-text body so the
-   * user can view the receipt content. Null for rows backed by a downloaded file.
+   * For a body-only receipt that we could NOT turn into a PDF, the email's
+   * plain-text body so the user can still view it. Null once a file exists.
    */
   emailBody: string | null
+  /**
+   * True when `localFilePath` is a PDF we generated from the email body (not the
+   * vendor's original attachment) — surfaced in the UI as "הופק מהמייל".
+   */
+  generated: boolean
   status: InvoiceStatus
   engineType: EngineType
   /** Row creation timestamp (ISO-8601). */

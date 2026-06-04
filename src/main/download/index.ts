@@ -11,6 +11,7 @@ import { getAuthorizedClient } from '../auth'
 import { fetchAttachmentData, NotConnectedError } from '../gmail'
 import { invoiceExistsByMessageId, invoiceExistsByPath, tryInsertInvoice } from '../db'
 import { getSettings } from '../settings'
+import { renderEmailPdf } from '../pdf'
 import { downloadApproved, type ApprovedEmail, type DownloadSummary } from './core'
 
 /**
@@ -48,6 +49,7 @@ export async function downloadAndRecord(
       targetDir: getEffectiveInvoicesDir(),
       fetchAttachment: (messageId, attachmentId) =>
         fetchAttachmentData(client, messageId, attachmentId),
+      renderEmailPdf,
       store: {
         existsByPath: invoiceExistsByPath,
         existsByMessageId: invoiceExistsByMessageId,

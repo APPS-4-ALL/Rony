@@ -261,7 +261,9 @@ async function exportCsv(): Promise<void> {
             </span>
           </td>
           <td class="py-2 px-3 text-slate-400">
-            {{ inv.localFilePath ? statusLabel(inv.status) : 'מהמייל' }}
+            {{
+              inv.generated ? 'הופק מהמייל' : inv.localFilePath ? statusLabel(inv.status) : 'מהמייל'
+            }}
           </td>
           <td class="py-2 px-3">
             <div class="flex items-center justify-center gap-2">
