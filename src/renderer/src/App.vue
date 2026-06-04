@@ -3,7 +3,14 @@ import { onMounted, onUnmounted, ref } from 'vue'
 import type { Invoice, ScanOptions, ScanProgress, ScanResult } from '@shared/types'
 import InvoicesTable from './components/InvoicesTable.vue'
 import SettingsView from './components/SettingsView.vue'
-import { progressLabel } from './lib/scanControls'
+import {
+  progressLabel,
+  COUNT_OPTIONS,
+  RANGE_PRESETS,
+  isoDaysAgo,
+  rangeDays,
+  type RangeKey
+} from './lib/scanControls'
 import logoUrl from './assets/logo.png'
 
 type View = 'dashboard' | 'settings'
@@ -23,18 +30,25 @@ const scanSummary = ref<ScanResult | null>(null)
 const scanError = ref<string>('')
 const scanProgress = ref<ScanProgress | null>(null)
 
-// Per-run scan controls (count + optional date range). Empty dates → the
-// engine's default 1-year look-back; the main process re-validates these.
+// Per-run scan controls: how many messages, and the time range. A preset window
+// (week/month/…) covers the common cases; 'custom' reveals explicit From/To
+// pickers. The main process re-validates everything.
 const scanMax = ref<number>(50)
+const rangePreset = ref<RangeKey>('year')
 const scanFrom = ref<string>('')
 const scanTo = ref<string>('')
 
-/** Build the options payload, omitting blank/invalid fields. */
+/** Build the options payload from the selected count + range. */
 function scanOptions(): ScanOptions {
   const opts: ScanOptions = {}
-  if (Number.isFinite(scanMax.value) && scanMax.value > 0) opts.maxResults = scanMax.value
-  if (scanFrom.value) opts.after = scanFrom.value
-  if (scanTo.value) opts.before = scanTo.value
+  if (scanMax.value > 0) opts.maxResults = scanMax.value
+  if (rangePreset.value === 'custom') {
+    if (scanFrom.value) opts.after = scanFrom.value
+    if (scanTo.value) opts.before = scanTo.value
+  } else {
+    const days = rangeDays(rangePreset.value)
+    if (days) opts.after = isoDaysAgo(days)
+  }
   return opts
 }
 
@@ -164,41 +178,77 @@ onUnmounted(() => unsubscribeProgress?.())
             </button>
           </div>
 
-          <!-- Per-run controls: message cap + optional date range -->
-          <div class="mt-4 flex flex-wrap items-end gap-4">
-            <label class="text-sm text-slate-400">
-              <span class="mb-1 block">מספר הודעות מרבי</span>
-              <input
-                v-model.number="scanMax"
-                type="number"
-                min="1"
-                max="1000"
-                :disabled="scanning"
-                class="w-28 rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none disabled:opacity-50"
-              />
-            </label>
-            <label class="text-sm text-slate-400">
-              <span class="mb-1 block">מתאריך</span>
-              <input
-                v-model="scanFrom"
-                type="date"
-                :disabled="scanning"
-                class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none disabled:opacity-50"
-              />
-            </label>
-            <label class="text-sm text-slate-400">
-              <span class="mb-1 block">עד תאריך</span>
-              <input
-                v-model="scanTo"
-                type="date"
-                :disabled="scanning"
-                class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none disabled:opacity-50"
-              />
-            </label>
+          <!-- Per-run controls: message count + time range, as quick chips -->
+          <div class="mt-5 space-y-4">
+            <!-- How many messages -->
+            <div>
+              <span class="mb-2 block text-sm font-medium text-slate-300">כמה הודעות לסרוק</span>
+              <div class="flex flex-wrap gap-2">
+                <button
+                  v-for="n in COUNT_OPTIONS"
+                  :key="n"
+                  type="button"
+                  :disabled="scanning"
+                  class="rounded-lg border px-3 py-1.5 text-sm font-medium transition disabled:opacity-50"
+                  :class="
+                    scanMax === n
+                      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-200'
+                      : 'border-slate-700 text-slate-300 hover:border-slate-500'
+                  "
+                  @click="scanMax = n"
+                >
+                  {{ n === 1000 ? 'מקסימום' : n }}
+                </button>
+              </div>
+            </div>
+
+            <!-- Time range -->
+            <div>
+              <span class="mb-2 block text-sm font-medium text-slate-300">טווח זמן</span>
+              <div class="flex flex-wrap gap-2">
+                <button
+                  v-for="preset in RANGE_PRESETS"
+                  :key="preset.key"
+                  type="button"
+                  :disabled="scanning"
+                  class="rounded-lg border px-3 py-1.5 text-sm font-medium transition disabled:opacity-50"
+                  :class="
+                    rangePreset === preset.key
+                      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-200'
+                      : 'border-slate-700 text-slate-300 hover:border-slate-500'
+                  "
+                  @click="rangePreset = preset.key"
+                >
+                  {{ preset.label }}
+                </button>
+              </div>
+
+              <!-- Custom From/To — only when "custom" is selected -->
+              <div v-if="rangePreset === 'custom'" class="mt-3 flex flex-wrap items-end gap-4">
+                <label class="text-sm text-slate-400">
+                  <span class="mb-1 block">מתאריך</span>
+                  <input
+                    v-model="scanFrom"
+                    type="date"
+                    :disabled="scanning"
+                    class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none disabled:opacity-50"
+                  />
+                </label>
+                <label class="text-sm text-slate-400">
+                  <span class="mb-1 block">עד תאריך</span>
+                  <input
+                    v-model="scanTo"
+                    type="date"
+                    :disabled="scanning"
+                    class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none disabled:opacity-50"
+                  />
+                </label>
+              </div>
+              <p v-if="rangePreset === 'custom'" class="mt-2 text-xs text-slate-500">
+                ניתן להשאיר תאריך ריק לחיפוש פתוח מצד אחד.
+              </p>
+            </div>
           </div>
-          <p class="mt-2 text-xs text-slate-500">
-            השאר/י את התאריכים ריקים כדי לסרוק את השנה האחרונה.
-          </p>
 
           <!-- Live progress (scan robustness) -->
           <div v-if="scanning && scanProgress" class="mt-4">
