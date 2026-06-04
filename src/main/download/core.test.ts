@@ -12,8 +12,11 @@ function fakeStore(): InvoiceStore & { rows: NewInvoice[] } {
   return {
     rows,
     existsByPath: (path) => rows.some((r) => r.localFilePath === path),
+    existsByMessageId: (id) => rows.some((r) => r.messageId === id),
     insert: (invoice) => {
-      if (rows.some((r) => r.localFilePath === invoice.localFilePath)) return false
+      if (invoice.localFilePath && rows.some((r) => r.localFilePath === invoice.localFilePath)) {
+        return false
+      }
       rows.push(invoice)
       return true
     }
@@ -38,7 +41,8 @@ function att(over: Partial<GmailAttachmentRef> = {}): GmailAttachmentRef {
 
 function approvedEmail(
   attachments: GmailAttachmentRef[],
-  over: Partial<ApprovedEmail> = {}
+  over: Partial<ApprovedEmail> = {},
+  bodyText = ''
 ): ApprovedEmail {
   const email: ParsedEmail = {
     id: 'msg1',
@@ -47,7 +51,7 @@ function approvedEmail(
     from: 'vendor@x.co.il',
     date: '2026-05-01',
     snippet: '',
-    bodyText: '',
+    bodyText,
     attachments
   }
   return { email, engineType: 'deterministic', ...over }
@@ -170,6 +174,7 @@ describe('downloadApproved — RONY-11 DoD', () => {
     const targetDir = tempDir()
     const store: InvoiceStore = {
       existsByPath: () => false, // not recorded when we checked...
+      existsByMessageId: () => false,
       insert: () => false // ...but the conflict-safe insert lost the race
     }
 
@@ -222,6 +227,92 @@ describe('downloadApproved — RONY-11 DoD', () => {
       date: '2026-04-30',
       engineType: 'ai'
     })
+  })
+
+  it('downloads office documents (docx/xlsx) too, not just PDFs/images', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    const approved = [
+      approvedEmail([
+        att({
+          filename: 'invoice.docx',
+          mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          attachmentId: 'D1',
+          size: 20_000
+        }),
+        // mislabeled as octet-stream, but the .xlsx extension is allowlisted
+        att({ filename: 'data.xlsx', mimeType: 'application/octet-stream', attachmentId: 'X1' })
+      ])
+    ]
+
+    const summary = await downloadApproved(approved, {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      store
+    })
+
+    expect(summary).toMatchObject({ downloaded: 2 })
+    const paths = store.rows.map((r) => r.localFilePath ?? '')
+    expect(paths.some((p) => p.includes('invoice.docx'))).toBe(true)
+    expect(paths.some((p) => p.includes('data.xlsx'))).toBe(true)
+  })
+
+  it('records a file-less row for a body-only receipt (no attachment)', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    const approved = [
+      approvedEmail(
+        [],
+        {
+          engineType: 'ai',
+          extracted: { vendor: 'Animal Express', amount: 64, currency: 'ILS', date: '2026-05-30' }
+        },
+        'סך הכל: 64.00 ₪'
+      )
+    ]
+
+    const summary = await downloadApproved(approved, {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      store
+    })
+
+    expect(summary).toMatchObject({ downloaded: 1 })
+    expect(store.rows).toHaveLength(1)
+    expect(store.rows[0]).toMatchObject({
+      messageId: 'msg1',
+      localFilePath: null,
+      emailBody: 'סך הכל: 64.00 ₪', // the body is kept so the user can view it
+      vendor: 'Animal Express',
+      amount: 64,
+      engineType: 'ai'
+    })
+  })
+
+  it('dedups a body-only receipt by message id on re-scan', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    const approved = [
+      approvedEmail([], {
+        engineType: 'ai',
+        extracted: { vendor: 'X', amount: 10, currency: 'ILS', date: '2026-05-30' }
+      })
+    ]
+
+    const first = await downloadApproved(approved, {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      store
+    })
+    const second = await downloadApproved(approved, {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      store
+    })
+
+    expect(first.downloaded).toBe(1)
+    expect(second).toMatchObject({ downloaded: 0, skipped: 1 })
+    expect(store.rows).toHaveLength(1) // no duplicate body-only row
   })
 
   it('counts a failed download without aborting the rest', async () => {

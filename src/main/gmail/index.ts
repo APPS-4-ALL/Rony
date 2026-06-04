@@ -17,7 +17,7 @@ import { getAuthorizedClient } from '../auth'
 import { backoffMs, isTransientStatus } from './retry'
 import {
   buildSearchQuery,
-  isPdfOrImage,
+  isInvoiceDocument,
   parseMessage,
   type GmailMessage,
   type ParsedEmail
@@ -206,14 +206,14 @@ export async function fetchEmails(options: FetchOptions = {}): Promise<FetchResu
     }
   })
 
-  // Keep only PDF/image attachments; drop any message left with none. The
-  // Gmail query already filters by extension — this MIME-level pass is the
-  // authoritative second check and trims mixed-attachment emails down to scope.
+  // Narrow each email's attachments to candidate invoice documents, but KEEP
+  // emails that end up with none — a body-only receipt has no attachment, and
+  // RONY-9/10 classify it on the email text. (The Gmail query already limited
+  // the set to document-bearing OR invoice-keyword emails.)
   const emails: ParsedEmail[] = []
   for (const email of parsed) {
     if (!email) continue
-    const attachments = email.attachments.filter(isPdfOrImage)
-    if (attachments.length === 0) continue
+    const attachments = email.attachments.filter(isInvoiceDocument)
     emails.push({ ...email, attachments })
   }
 

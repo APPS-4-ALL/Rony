@@ -15,6 +15,7 @@ interface InvoiceRow {
   amount: number | null
   currency: string | null
   local_file_path: string | null
+  email_body: string | null
   status: Invoice['status']
   engine_type: Invoice['engineType']
   created_at: string
@@ -30,6 +31,7 @@ function rowToInvoice(row: InvoiceRow): Invoice {
     amount: row.amount,
     currency: row.currency,
     localFilePath: row.local_file_path,
+    emailBody: row.email_body ?? null,
     status: row.status,
     engineType: row.engine_type,
     createdAt: row.created_at
@@ -59,6 +61,7 @@ export function initDatabase(): Database.Database {
       amount          REAL,
       currency        TEXT,
       local_file_path TEXT,
+      email_body      TEXT,
       status          TEXT NOT NULL DEFAULT 'pending',
       engine_type     TEXT NOT NULL,
       created_at      TEXT NOT NULL DEFAULT (datetime('now'))
@@ -82,6 +85,9 @@ export function initDatabase(): Database.Database {
   if (!columns.some((c) => c.name === 'date_source')) {
     db.exec(`ALTER TABLE invoices ADD COLUMN date_source TEXT`)
   }
+  if (!columns.some((c) => c.name === 'email_body')) {
+    db.exec(`ALTER TABLE invoices ADD COLUMN email_body TEXT`)
+  }
 
   // Clean up junk left by earlier builds whose startup self-test inserted a
   // "Self-Test Vendor" row on every launch (now removed at insert time).
@@ -98,8 +104,8 @@ function getDb(): Database.Database {
 
 export function insertInvoice(invoice: NewInvoice): Invoice {
   const stmt = getDb().prepare(`
-    INSERT INTO invoices (message_id, date, date_source, vendor, amount, currency, local_file_path, status, engine_type)
-    VALUES (@messageId, @date, @dateSource, @vendor, @amount, @currency, @localFilePath, @status, @engineType)
+    INSERT INTO invoices (message_id, date, date_source, vendor, amount, currency, local_file_path, email_body, status, engine_type)
+    VALUES (@messageId, @date, @dateSource, @vendor, @amount, @currency, @localFilePath, @emailBody, @status, @engineType)
   `)
   const info = stmt.run(invoice)
   return getInvoiceById(Number(info.lastInsertRowid))!
@@ -130,6 +136,12 @@ export function invoiceExistsByPath(localFilePath: string): boolean {
   return row !== undefined
 }
 
+/** True if any row already exists for this Gmail message id (body-only dedup). */
+export function invoiceExistsByMessageId(messageId: string): boolean {
+  const row = getDb().prepare('SELECT 1 FROM invoices WHERE message_id = ? LIMIT 1').get(messageId)
+  return row !== undefined
+}
+
 /**
  * Insert an invoice, but do nothing if a row with the same `local_file_path`
  * already exists (RONY-11). Returns true if a new row was inserted, false if it
@@ -138,8 +150,8 @@ export function invoiceExistsByPath(localFilePath: string): boolean {
 export function tryInsertInvoice(invoice: NewInvoice): boolean {
   const info = getDb()
     .prepare(
-      `INSERT INTO invoices (message_id, date, date_source, vendor, amount, currency, local_file_path, status, engine_type)
-       VALUES (@messageId, @date, @dateSource, @vendor, @amount, @currency, @localFilePath, @status, @engineType)
+      `INSERT INTO invoices (message_id, date, date_source, vendor, amount, currency, local_file_path, email_body, status, engine_type)
+       VALUES (@messageId, @date, @dateSource, @vendor, @amount, @currency, @localFilePath, @emailBody, @status, @engineType)
        ON CONFLICT(local_file_path) DO NOTHING`
     )
     .run(invoice)
@@ -188,6 +200,7 @@ export function runStartupSelfTest(): void {
     amount: 123.45,
     currency: 'ILS',
     localFilePath: null,
+    emailBody: null,
     status: 'pending',
     engineType: 'deterministic'
   })

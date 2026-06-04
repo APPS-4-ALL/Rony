@@ -8,7 +8,7 @@
  */
 import { access, mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { isPdfOrImage, type GmailAttachmentRef, type ParsedEmail } from '../gmail/parse'
+import { isInvoiceDocument, type GmailAttachmentRef, type ParsedEmail } from '../gmail/parse'
 import type { EngineType, NewInvoice } from '../../shared/types'
 
 /** Extracted invoice fields. The AI engine fills these; the deterministic engine leaves them null. */
@@ -31,6 +31,8 @@ export interface ApprovedEmail {
 /** Minimal persistence surface — the real impl wraps SQLite; tests inject a fake. */
 export interface InvoiceStore {
   existsByPath(localFilePath: string): boolean
+  /** True if a row already exists for this Gmail message id (body-only dedup). */
+  existsByMessageId(messageId: string): boolean
   /** Insert a row; return true if inserted, false if a row for this path already exists. */
   insert(invoice: NewInvoice): boolean
 }
@@ -72,12 +74,43 @@ export function sanitizeFilename(name: string): string {
   return cleaned.length > 0 ? cleaned : 'attachment'
 }
 
-/** Type/size gate: a real PDF, or an image large enough not to be a logo. */
+/**
+ * Type/size gate for a downloadable invoice document: a PDF / office doc of any
+ * size, or an image large enough not to be a logo/signature.
+ */
 function isInScope(att: GmailAttachmentRef): boolean {
-  if (!isPdfOrImage(att)) return false
+  if (!isInvoiceDocument(att)) return false
   const isImage = att.mimeType.toLowerCase().startsWith('image/')
   if (isImage && att.size > 0 && att.size < MIN_IMAGE_BYTES) return false
   return true
+}
+
+/**
+ * Build the invoice row for an approved email (AI-extracted fields win over the
+ * fallbacks). A null `localFilePath` is a body-only receipt — the invoice lives
+ * in the email text, with no file to download.
+ */
+function buildInvoice(
+  email: ParsedEmail,
+  engineType: EngineType,
+  extracted: ExtractedFields | undefined,
+  localFilePath: string | null
+): NewInvoice {
+  return {
+    messageId: email.id,
+    date: extracted?.date ?? email.date,
+    // 'document' only when the AI actually extracted a date; else the email's date.
+    dateSource: extracted?.date ? 'document' : 'email',
+    vendor: extracted?.vendor ?? null,
+    amount: extracted?.amount ?? null,
+    currency: extracted?.currency ?? null,
+    localFilePath,
+    // Keep the email body only for file-less (body-only) rows, so the user can
+    // view the receipt content that lives inside the message.
+    emailBody: localFilePath ? null : email.bodyText,
+    status: 'downloaded',
+    engineType
+  }
 }
 
 /** Async file-existence check (non-blocking). */
@@ -151,19 +184,7 @@ export async function downloadApproved(
         attachmentId: att.attachmentId,
         filename: att.filename,
         targetPath,
-        invoice: {
-          messageId: email.id,
-          date: extracted?.date ?? email.date,
-          // Record which source actually supplied the date so the UI can show
-          // accurate provenance — 'document' only when the AI extracted one.
-          dateSource: extracted?.date ? 'document' : 'email',
-          vendor: extracted?.vendor ?? null,
-          amount: extracted?.amount ?? null,
-          currency: extracted?.currency ?? null,
-          localFilePath: targetPath,
-          status: 'downloaded',
-          engineType
-        }
+        invoice: buildInvoice(email, engineType, extracted, targetPath)
       })
     })
   }
@@ -197,6 +218,20 @@ export async function downloadApproved(
       onProgress?.(++processed, tasks.length)
     }
   })
+
+  // Body-only receipts: approved emails with NO in-scope attachment are real
+  // invoices printed in the email body. Record a file-less row, deduped by
+  // message id (there's no file path to key on).
+  for (const { email, engineType, extracted } of approved) {
+    const hasDoc = email.attachments.some((a) => a.attachmentId && isInScope(a))
+    if (hasDoc) continue
+    if (deps.store.existsByMessageId(email.id)) {
+      summary.skipped++
+      continue
+    }
+    if (deps.store.insert(buildInvoice(email, engineType, extracted, null))) summary.downloaded++
+    else summary.skipped++
+  }
 
   return summary
 }

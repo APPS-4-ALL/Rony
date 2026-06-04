@@ -31,6 +31,11 @@ export interface Invoice {
   currency: string | null
   /** Absolute path to the downloaded file on the local machine. */
   localFilePath: string | null
+  /**
+   * For a body-only receipt (no attachment), the email's plain-text body so the
+   * user can view the receipt content. Null for rows backed by a downloaded file.
+   */
+  emailBody: string | null
   status: InvoiceStatus
   engineType: EngineType
   /** Row creation timestamp (ISO-8601). */

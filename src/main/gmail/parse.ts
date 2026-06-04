@@ -218,6 +218,29 @@ export function isPdfOrImage(att: GmailAttachmentRef): boolean {
   return ext === 'pdf' || IMAGE_EXTENSIONS.includes(ext)
 }
 
+/**
+ * Office / text document extensions we ALSO accept as candidate invoice files.
+ * The AI can't read inside these (only PDFs/images go to the vision model), but
+ * we still fetch + download them so the user has the file locally.
+ */
+const DOC_EXTENSIONS = ['docx', 'doc', 'xlsx', 'xls', 'csv'] as const
+
+/** Allowlist of every extension we treat as a candidate invoice document. */
+export const INVOICE_DOC_EXTENSIONS = ['pdf', ...IMAGE_EXTENSIONS, ...DOC_EXTENSIONS]
+
+/**
+ * True if the attachment is a candidate invoice document — a PDF, an image, or a
+ * common office/text doc. Judges by MIME first, falling back to the filename
+ * extension (senders often mislabel these as application/octet-stream). The
+ * allowlist keeps out junk/system files (.ics, .vcf, .p7s, winmail.dat, …).
+ */
+export function isInvoiceDocument(att: GmailAttachmentRef): boolean {
+  const mime = att.mimeType.toLowerCase()
+  if (mime === 'application/pdf' || mime.startsWith('image/')) return true
+  const ext = att.filename.toLowerCase().split('.').pop() ?? ''
+  return INVOICE_DOC_EXTENSIONS.includes(ext)
+}
+
 /** Options that shape the Gmail search query RONY-7 runs. */
 export interface SearchQueryOptions {
   /** Lower date bound, inclusive (ISO YYYY-MM-DD). */
@@ -226,25 +249,65 @@ export interface SearchQueryOptions {
   before?: string
   /** Used only when neither `after` nor `before` is given (e.g. "1y", "90d"). */
   defaultWindow?: string
+  /**
+   * Restrict to emails that carry a document attachment. Default (false) ALSO
+   * pulls in body-only invoices/receipts by matching invoice keywords — RONY-9/10
+   * classify on the email text, so a receipt printed in the body still counts.
+   */
+  attachmentsOnly?: boolean
 }
+
+/**
+ * Invoice/receipt keywords that pull body-only emails (no attachment) into the
+ * search, in both languages. Broad ON PURPOSE — recall at the fetch stage; the
+ * scan engine then classifies precisely, and `maxResults` caps the volume.
+ */
+export const BODY_RECEIPT_TERMS = [
+  'invoice',
+  'receipt',
+  'bill',
+  'tax invoice',
+  'order confirmation',
+  'payment receipt',
+  'חשבונית',
+  'קבלה',
+  'חשבונית מס',
+  'אישור תשלום',
+  'דרישת תשלום',
+  'הזמנה',
+  'אישור הזמנה'
+] as const
 
 /** Gmail's date operators want YYYY/MM/DD; accept ISO YYYY-MM-DD and convert. */
 function toGmailDate(iso: string): string {
   return iso.replace(/-/g, '/')
 }
 
+/** Phrase-quote a Gmail term when it has whitespace, so it matches exactly. */
+function gmailTerm(term: string): string {
+  return /\s/.test(term) ? `"${term}"` : term
+}
+
 /**
- * Build the Gmail search query for RONY-7: messages that carry a PDF or image
- * attachment, optionally bounded by a date range. We constrain at the Gmail
- * level (not just client-side) so we page over far fewer messages.
+ * Build the Gmail search query for RONY-7, optionally bounded by a date range.
+ * Two branches, OR-ed together (unless `attachmentsOnly`):
+ *   1. emails carrying a document attachment (PDF/image/office — see the
+ *      `filename:` allowlist), and
+ *   2. body-only invoices/receipts that match an invoice keyword.
+ * We constrain at the Gmail level (not just client-side) so we page over far
+ * fewer messages; `maxResults` upstream caps the total either way.
  *
- * The `filename:` terms match by extension; the per-attachment MIME check in
- * the fetch layer is the authoritative second pass.
+ * The `filename:`/keyword terms are the coarse net; the engine + the
+ * per-attachment MIME check are the authoritative second pass.
  */
 export function buildSearchQuery(opts: SearchQueryOptions = {}): string {
-  const exts = ['pdf', ...IMAGE_EXTENSIONS]
-  const parts = ['has:attachment', `filename:(${exts.join(' OR ')})`]
+  const attachmentClause = `has:attachment filename:(${INVOICE_DOC_EXTENSIONS.join(' OR ')})`
+  const scope = opts.attachmentsOnly
+    ? attachmentClause
+    : `(${attachmentClause}) OR (${BODY_RECEIPT_TERMS.map(gmailTerm).join(' OR ')})`
 
+  // Wrap the (possibly OR-ed) scope so the date filters AND with the whole thing.
+  const parts = [`(${scope})`]
   if (opts.after) parts.push(`after:${toGmailDate(opts.after)}`)
   if (opts.before) parts.push(`before:${toGmailDate(opts.before)}`)
   if (!opts.after && !opts.before && opts.defaultWindow) {

@@ -179,11 +179,21 @@ describe('isPdfOrImage — PDF/image attachment filter', () => {
   })
 })
 
-describe('buildSearchQuery — PDF/image + date range', () => {
-  it('always constrains to PDF/image attachments', () => {
+describe('buildSearchQuery — documents OR body-only keywords + date range', () => {
+  it('matches document attachments (incl. office types) OR invoice keywords', () => {
     const q = buildSearchQuery()
     expect(q).toContain('has:attachment')
     expect(q).toContain('filename:(pdf OR jpg OR jpeg OR png')
+    expect(q).toContain('docx') // widened beyond PDF/image
+    expect(q).toContain('invoice') // body-only keyword branch
+    expect(q).toContain('חשבונית')
+    expect(q).toContain('"order confirmation"') // multi-word terms are phrase-quoted
+  })
+
+  it('can restrict to attachments only (no keyword branch)', () => {
+    const q = buildSearchQuery({ attachmentsOnly: true })
+    expect(q).toContain('has:attachment')
+    expect(q).not.toContain('invoice') // keyword branch omitted
   })
 
   it('uses the default window only when no range is given', () => {
