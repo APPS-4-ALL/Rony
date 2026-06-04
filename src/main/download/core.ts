@@ -238,7 +238,14 @@ export async function downloadApproved(
   // becomes a first-class, openable/exportable file; if PDF rendering isn't
   // available (or fails), we fall back to a file-less row that keeps the body.
   // Deduped by message id (there's no original file path to key on).
+  //
+  // SMART-SCAN ONLY: this is an AI-engine feature. The deterministic engine is a
+  // coarse keyword match with no extracted fields, so a body-only match there
+  // would produce a near-empty row (no vendor/amount) from possibly-incidental
+  // keywords (e.g. "קבלה" also means "reception"). We therefore record body-only
+  // receipts only when the AI judged the email financial.
   for (const { email, engineType, extracted } of approved) {
+    if (engineType !== 'ai') continue
     const hasDoc = email.attachments.some((a) => a.attachmentId && isInScope(a))
     if (hasDoc) continue
     if (deps.store.existsByMessageId(email.id)) {

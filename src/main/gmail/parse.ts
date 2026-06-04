@@ -259,23 +259,22 @@ export interface SearchQueryOptions {
 
 /**
  * Invoice/receipt keywords that pull body-only emails (no attachment) into the
- * search, in both languages. Broad ON PURPOSE — recall at the fetch stage; the
- * scan engine then classifies precisely, and `maxResults` caps the volume.
+ * search, in both languages. Kept HIGH-PRECISION on purpose: with a small
+ * `maxResults`, Gmail returns only the newest matches, so broad words like
+ * "order" (הזמנה) / "order confirmation" — which aren't financial documents
+ * anyway — would flood the budget with marketing/shipping mail and crowd out
+ * real invoices. The scan engine still classifies each match afterwards.
  */
 export const BODY_RECEIPT_TERMS = [
   'invoice',
   'receipt',
-  'bill',
   'tax invoice',
-  'order confirmation',
   'payment receipt',
   'חשבונית',
-  'קבלה',
   'חשבונית מס',
+  'קבלה',
   'אישור תשלום',
-  'דרישת תשלום',
-  'הזמנה',
-  'אישור הזמנה'
+  'דרישת תשלום'
 ] as const
 
 /** Gmail's date operators want YYYY/MM/DD; accept ISO YYYY-MM-DD and convert. */

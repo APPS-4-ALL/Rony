@@ -187,7 +187,10 @@ describe('buildSearchQuery — documents OR body-only keywords + date range', ()
     expect(q).toContain('docx') // widened beyond PDF/image
     expect(q).toContain('invoice') // body-only keyword branch
     expect(q).toContain('חשבונית')
-    expect(q).toContain('"order confirmation"') // multi-word terms are phrase-quoted
+    expect(q).toContain('"tax invoice"') // multi-word terms are phrase-quoted
+    // High-precision only: broad, non-financial words must NOT widen the net.
+    expect(q).not.toContain('הזמנה')
+    expect(q).not.toContain('order confirmation')
   })
 
   it('can restrict to attachments only (no keyword branch)', () => {

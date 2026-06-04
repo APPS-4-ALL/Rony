@@ -346,6 +346,26 @@ describe('downloadApproved — RONY-11 DoD', () => {
     expect(store.rows).toHaveLength(1) // no duplicate body-only row
   })
 
+  it('does NOT record a body-only receipt for the deterministic engine', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    const renderEmailPdf = vi.fn(async () => Buffer.from('%PDF-1.4 fake'))
+    // A deterministic keyword match with no attachment + no extracted fields:
+    // body-only is a smart-scan (AI) feature, so this must produce no row/PDF.
+    const approved = [approvedEmail([], { engineType: 'deterministic' }, 'תודה, קיבלנו את פנייתך')]
+
+    const summary = await downloadApproved(approved, {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      renderEmailPdf,
+      store
+    })
+
+    expect(renderEmailPdf).not.toHaveBeenCalled()
+    expect(store.rows).toHaveLength(0)
+    expect(summary.downloaded).toBe(0)
+  })
+
   it('counts a failed download without aborting the rest', async () => {
     const targetDir = tempDir()
     const store = fakeStore()
