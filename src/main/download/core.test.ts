@@ -35,6 +35,7 @@ function att(over: Partial<GmailAttachmentRef> = {}): GmailAttachmentRef {
     mimeType: 'application/pdf',
     attachmentId: 'A1',
     size: 50_000,
+    inline: false,
     ...over
   }
 }
@@ -121,6 +122,36 @@ describe('downloadApproved — RONY-11 DoD', () => {
     expect(first.downloaded).toBe(1)
     expect(second).toMatchObject({ downloaded: 0, skipped: 1 })
     expect(store.rows).toHaveLength(1) // no duplicate row
+  })
+
+  it('downloads the real attachment but skips an inline signature logo', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    // The reported case: an invoice email whose HTML signature embeds a company
+    // logo (a large inline image). Only the real PDF should be saved.
+    const approved = [
+      approvedEmail([
+        att({ filename: 'quote.pdf', mimeType: 'application/pdf', attachmentId: 'A1' }),
+        att({
+          filename: 'logo.png',
+          mimeType: 'image/png',
+          attachmentId: 'LOGO',
+          size: 45_000, // well over MIN_IMAGE_BYTES — size alone wouldn't catch it
+          inline: true
+        })
+      ])
+    ]
+
+    const summary = await downloadApproved(approved, {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      store
+    })
+
+    expect(summary).toMatchObject({ downloaded: 1, skipped: 1 })
+    expect(store.rows).toHaveLength(1)
+    expect(store.rows[0].localFilePath).toContain('quote.pdf')
+    expect(existsSync(join(targetDir, 'msg1__1__logo.png'))).toBe(false)
   })
 
   // #1 — same-name attachments in one email must NOT silently drop one of them.
@@ -344,6 +375,26 @@ describe('downloadApproved — RONY-11 DoD', () => {
     expect(first.downloaded).toBe(1)
     expect(second).toMatchObject({ downloaded: 0, skipped: 1 })
     expect(store.rows).toHaveLength(1) // no duplicate body-only row
+  })
+
+  it('does NOT record a body-only receipt for the deterministic engine', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    const renderEmailPdf = vi.fn(async () => Buffer.from('%PDF-1.4 fake'))
+    // A deterministic keyword match with no attachment + no extracted fields:
+    // body-only is a smart-scan (AI) feature, so this must produce no row/PDF.
+    const approved = [approvedEmail([], { engineType: 'deterministic' }, 'תודה, קיבלנו את פנייתך')]
+
+    const summary = await downloadApproved(approved, {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      renderEmailPdf,
+      store
+    })
+
+    expect(renderEmailPdf).not.toHaveBeenCalled()
+    expect(store.rows).toHaveLength(0)
+    expect(summary.downloaded).toBe(0)
   })
 
   it('counts a failed download without aborting the rest', async () => {

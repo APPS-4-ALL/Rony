@@ -59,6 +59,13 @@ export interface GmailAttachmentRef {
   /** Handle for `users.messages.attachments.get` (RONY-11). Null if inline. */
   attachmentId: string | null
   size: number
+  /**
+   * True when the part is embedded IN the message body (a `cid:`-referenced
+   * signature logo / inline image), not a real attached file — detected via
+   * `Content-Disposition: inline` or a `Content-ID` header. The download/vision
+   * layers skip inline images so logos never get saved as "invoices".
+   */
+  inline: boolean
 }
 
 /** A Gmail message flattened into the fields Rony cares about. */
@@ -136,11 +143,18 @@ function collect(
   if (!part) return
 
   if (isAttachment(part)) {
+    // Inline parts (signature logos, embedded body images) carry a Content-ID
+    // and/or `Content-Disposition: inline`. A real attached file is `attachment`
+    // (or unspecified). We flag inline so the invoice scan can ignore logos.
+    const disposition = getHeader(part.headers, 'Content-Disposition').toLowerCase().trimStart()
+    const hasContentId = getHeader(part.headers, 'Content-ID').trim().length > 0
+    const inline = disposition.startsWith('inline') || (hasContentId && !disposition.startsWith('attachment'))
     acc.attachments.push({
       filename: part.filename as string,
       mimeType: part.mimeType ?? 'application/octet-stream',
       attachmentId: part.body?.attachmentId ?? null,
-      size: part.body?.size ?? 0
+      size: part.body?.size ?? 0,
+      inline
     })
     return // don't treat an attachment's bytes as body text
   }
@@ -259,23 +273,22 @@ export interface SearchQueryOptions {
 
 /**
  * Invoice/receipt keywords that pull body-only emails (no attachment) into the
- * search, in both languages. Broad ON PURPOSE — recall at the fetch stage; the
- * scan engine then classifies precisely, and `maxResults` caps the volume.
+ * search, in both languages. Kept HIGH-PRECISION on purpose: with a small
+ * `maxResults`, Gmail returns only the newest matches, so broad words like
+ * "order" (הזמנה) / "order confirmation" — which aren't financial documents
+ * anyway — would flood the budget with marketing/shipping mail and crowd out
+ * real invoices. The scan engine still classifies each match afterwards.
  */
 export const BODY_RECEIPT_TERMS = [
   'invoice',
   'receipt',
-  'bill',
   'tax invoice',
-  'order confirmation',
   'payment receipt',
   'חשבונית',
-  'קבלה',
   'חשבונית מס',
+  'קבלה',
   'אישור תשלום',
-  'דרישת תשלום',
-  'הזמנה',
-  'אישור הזמנה'
+  'דרישת תשלום'
 ] as const
 
 /** Gmail's date operators want YYYY/MM/DD; accept ISO YYYY-MM-DD and convert. */

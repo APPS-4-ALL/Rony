@@ -138,9 +138,42 @@ describe('parseMessage — attachments', () => {
         filename: 'invoice_2026.pdf',
         mimeType: 'application/pdf',
         attachmentId: 'ATT_123',
-        size: 20480
+        size: 20480,
+        inline: false
       }
     ])
+  })
+
+  it('flags inline signature/logo images (Content-Disposition / Content-ID) as inline', () => {
+    const msg: GmailMessage = {
+      id: 'm6',
+      payload: {
+        mimeType: 'multipart/mixed',
+        parts: [
+          { mimeType: 'text/plain', body: { data: b64url('הצעת מחיר מצורפת') } },
+          // The real attachment: explicitly a file.
+          {
+            mimeType: 'application/pdf',
+            filename: 'quote.pdf',
+            headers: [{ name: 'Content-Disposition', value: 'attachment; filename="quote.pdf"' }],
+            body: { size: 30000, attachmentId: 'REAL' }
+          },
+          // A signature logo embedded in the HTML body via cid: — NOT a real file.
+          {
+            mimeType: 'image/png',
+            filename: 'logo.png',
+            headers: [
+              { name: 'Content-Disposition', value: 'inline; filename="logo.png"' },
+              { name: 'Content-ID', value: '<logo@aman>' }
+            ],
+            body: { size: 45000, attachmentId: 'LOGO' }
+          }
+        ]
+      }
+    }
+    const byName = Object.fromEntries(parseMessage(msg).attachments.map((a) => [a.filename, a]))
+    expect(byName['quote.pdf'].inline).toBe(false)
+    expect(byName['logo.png'].inline).toBe(true)
   })
 })
 
@@ -150,6 +183,7 @@ describe('isPdfOrImage — PDF/image attachment filter', () => {
     mimeType: 'application/octet-stream',
     attachmentId: 'A',
     size: 1,
+    inline: false,
     ...over
   })
 
@@ -187,7 +221,10 @@ describe('buildSearchQuery — documents OR body-only keywords + date range', ()
     expect(q).toContain('docx') // widened beyond PDF/image
     expect(q).toContain('invoice') // body-only keyword branch
     expect(q).toContain('חשבונית')
-    expect(q).toContain('"order confirmation"') // multi-word terms are phrase-quoted
+    expect(q).toContain('"tax invoice"') // multi-word terms are phrase-quoted
+    // High-precision only: broad, non-financial words must NOT widen the net.
+    expect(q).not.toContain('הזמנה')
+    expect(q).not.toContain('order confirmation')
   })
 
   it('can restrict to attachments only (no keyword branch)', () => {
