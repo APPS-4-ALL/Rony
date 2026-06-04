@@ -148,7 +148,8 @@ function collect(
     // (or unspecified). We flag inline so the invoice scan can ignore logos.
     const disposition = getHeader(part.headers, 'Content-Disposition').toLowerCase().trimStart()
     const hasContentId = getHeader(part.headers, 'Content-ID').trim().length > 0
-    const inline = disposition.startsWith('inline') || (hasContentId && !disposition.startsWith('attachment'))
+    const inline =
+      disposition.startsWith('inline') || (hasContentId && !disposition.startsWith('attachment'))
     acc.attachments.push({
       filename: part.filename as string,
       mimeType: part.mimeType ?? 'application/octet-stream',
