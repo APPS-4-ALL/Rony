@@ -21,6 +21,7 @@ function inv(over: Partial<Invoice>): Invoice {
     amount: 100,
     currency: 'ILS',
     localFilePath: null,
+    emailBody: null,
     status: 'pending',
     engineType: 'deterministic',
     createdAt: '2026-01-01T00:00:00Z',

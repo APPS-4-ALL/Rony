@@ -105,6 +105,9 @@ function buildInvoice(
     amount: extracted?.amount ?? null,
     currency: extracted?.currency ?? null,
     localFilePath,
+    // Keep the email body only for file-less (body-only) rows, so the user can
+    // view the receipt content that lives inside the message.
+    emailBody: localFilePath ? null : email.bodyText,
     status: 'downloaded',
     engineType
   }

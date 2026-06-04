@@ -41,7 +41,8 @@ function att(over: Partial<GmailAttachmentRef> = {}): GmailAttachmentRef {
 
 function approvedEmail(
   attachments: GmailAttachmentRef[],
-  over: Partial<ApprovedEmail> = {}
+  over: Partial<ApprovedEmail> = {},
+  bodyText = ''
 ): ApprovedEmail {
   const email: ParsedEmail = {
     id: 'msg1',
@@ -50,7 +51,7 @@ function approvedEmail(
     from: 'vendor@x.co.il',
     date: '2026-05-01',
     snippet: '',
-    bodyText: '',
+    bodyText,
     attachments
   }
   return { email, engineType: 'deterministic', ...over }
@@ -260,10 +261,14 @@ describe('downloadApproved — RONY-11 DoD', () => {
     const targetDir = tempDir()
     const store = fakeStore()
     const approved = [
-      approvedEmail([], {
-        engineType: 'ai',
-        extracted: { vendor: 'Animal Express', amount: 64, currency: 'ILS', date: '2026-05-30' }
-      })
+      approvedEmail(
+        [],
+        {
+          engineType: 'ai',
+          extracted: { vendor: 'Animal Express', amount: 64, currency: 'ILS', date: '2026-05-30' }
+        },
+        'סך הכל: 64.00 ₪'
+      )
     ]
 
     const summary = await downloadApproved(approved, {
@@ -277,6 +282,7 @@ describe('downloadApproved — RONY-11 DoD', () => {
     expect(store.rows[0]).toMatchObject({
       messageId: 'msg1',
       localFilePath: null,
+      emailBody: 'סך הכל: 64.00 ₪', // the body is kept so the user can view it
       vendor: 'Animal Express',
       amount: 64,
       engineType: 'ai'

@@ -117,6 +117,9 @@ async function removeInvoice(inv: Invoice): Promise<void> {
 const exporting = ref(false)
 const exportNote = ref('')
 
+/** The body-only invoice whose email content is shown in the popup (null = closed). */
+const viewingEmail = ref<Invoice | null>(null)
+
 /**
  * Export the currently displayed rows (filtered + sorted) to a CSV via the OS
  * save dialog (RONY-15). A UTF-8 BOM is prepended so Excel renders Hebrew
@@ -257,14 +260,33 @@ async function exportCsv(): Promise<void> {
               {{ engineLabel(inv.engineType) }}
             </span>
           </td>
-          <td class="py-2 px-3 text-slate-400">{{ statusLabel(inv.status) }}</td>
+          <td class="py-2 px-3 text-slate-400">
+            {{ inv.localFilePath ? statusLabel(inv.status) : 'מהמייל' }}
+          </td>
           <td class="py-2 px-3">
             <div class="flex items-center justify-center gap-2">
+              <!-- File on disk → open it; body-only receipt → view the email; else disabled. -->
               <button
-                class="whitespace-nowrap rounded-md border border-slate-700 px-2.5 py-1 text-xs font-medium text-slate-200 transition hover:border-emerald-500 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-700 disabled:hover:text-slate-200"
-                :disabled="!inv.localFilePath"
-                :title="inv.localFilePath ?? 'טרם הורד'"
+                v-if="inv.localFilePath"
+                class="whitespace-nowrap rounded-md border border-slate-700 px-2.5 py-1 text-xs font-medium text-slate-200 transition hover:border-emerald-500 hover:text-emerald-300"
+                :title="inv.localFilePath"
                 @click="openFile(inv)"
+              >
+                פתיחת קובץ
+              </button>
+              <button
+                v-else-if="inv.emailBody"
+                class="whitespace-nowrap rounded-md border border-slate-700 px-2.5 py-1 text-xs font-medium text-slate-200 transition hover:border-emerald-500 hover:text-emerald-300"
+                title="הצגת תוכן המייל"
+                @click="viewingEmail = inv"
+              >
+                הצג מייל
+              </button>
+              <button
+                v-else
+                class="cursor-not-allowed whitespace-nowrap rounded-md border border-slate-700 px-2.5 py-1 text-xs font-medium text-slate-200 opacity-40"
+                disabled
+                title="טרם הורד"
               >
                 פתיחת קובץ
               </button>
@@ -303,5 +325,35 @@ async function exportCsv(): Promise<void> {
     <p v-if="exportNote" class="mt-4 rounded-lg bg-slate-800/60 px-3 py-2 text-sm text-slate-300">
       {{ exportNote }}
     </p>
+
+    <!-- Email content popup (body-only receipts) -->
+    <div
+      v-if="viewingEmail"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      @click.self="viewingEmail = null"
+    >
+      <div
+        class="flex max-h-[80vh] w-full max-w-2xl flex-col rounded-xl border border-slate-700 bg-slate-900 text-start shadow-xl"
+      >
+        <div class="flex items-center justify-between gap-4 border-b border-slate-800 px-5 py-3">
+          <div>
+            <h3 class="text-base font-semibold text-slate-100">
+              {{ viewingEmail.vendor ?? 'תוכן המייל' }}
+            </h3>
+            <p class="text-xs text-slate-500">תוכן הקבלה מתוך גוף המייל</p>
+          </div>
+          <button
+            class="rounded-md border border-slate-700 px-3 py-1 text-sm text-slate-200 transition hover:border-emerald-500 hover:text-emerald-300"
+            @click="viewingEmail = null"
+          >
+            סגירה
+          </button>
+        </div>
+        <pre
+          class="overflow-auto whitespace-pre-wrap break-words px-5 py-4 font-sans text-sm leading-relaxed text-slate-300"
+          >{{ viewingEmail.emailBody }}</pre
+        >
+      </div>
+    </div>
   </section>
 </template>

@@ -15,6 +15,7 @@ function inv(over: Partial<Invoice>): Invoice {
     amount: 100,
     currency: 'ILS',
     localFilePath: null,
+    emailBody: null,
     status: 'downloaded',
     engineType: 'deterministic',
     createdAt: '2026-01-01T00:00:00Z',
@@ -233,5 +234,16 @@ describe('InvoicesTable.vue', () => {
     const row = wrapper.find('tbody tr')
     expect(row.classes()).toContain('bg-emerald-500/10') // still tinted
     expect(row.text()).not.toContain('חדש') // badge gone
+  })
+
+  it('shows a "מהמייל" status and a "הצג מייל" popup for a body-only receipt', async () => {
+    const wrapper = mount(InvoicesTable, {
+      props: { invoices: [inv({ id: 1, localFilePath: null, emailBody: 'סך הכל: 64.00 ₪' })] }
+    })
+    expect(wrapper.text()).toContain('מהמייל') // status, not "הורד"
+    const viewBtn = wrapper.findAll('button').find((b) => b.text().includes('הצג מייל'))!
+    expect(viewBtn).toBeTruthy()
+    await viewBtn.trigger('click')
+    expect(wrapper.text()).toContain('סך הכל: 64.00 ₪') // body shown in the popup
   })
 })
