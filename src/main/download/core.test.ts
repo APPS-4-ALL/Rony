@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -287,6 +287,37 @@ describe('downloadApproved — RONY-11 DoD', () => {
       amount: 64,
       engineType: 'ai'
     })
+  })
+
+  it('renders a body-only receipt into a generated PDF when a renderer is given', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    const renderEmailPdf = vi.fn(async () => Buffer.from('%PDF-1.4 fake'))
+    const approved = [
+      approvedEmail(
+        [],
+        {
+          engineType: 'ai',
+          extracted: { vendor: 'Animal Express', amount: 64, currency: 'ILS', date: '2026-05-30' }
+        },
+        'סך הכל: 64.00 ₪'
+      )
+    ]
+
+    const summary = await downloadApproved(approved, {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      renderEmailPdf,
+      store
+    })
+
+    expect(renderEmailPdf).toHaveBeenCalledOnce()
+    expect(summary).toMatchObject({ downloaded: 1 })
+    const row = store.rows[0]
+    expect(row.generated).toBe(true)
+    expect(row.localFilePath).toContain('msg1__email.pdf')
+    expect(row.emailBody).toBeNull() // the body now lives in the generated PDF
+    expect(existsSync(row.localFilePath as string)).toBe(true)
   })
 
   it('dedups a body-only receipt by message id on re-scan', async () => {

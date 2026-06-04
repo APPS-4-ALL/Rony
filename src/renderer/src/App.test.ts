@@ -59,6 +59,7 @@ describe('App.vue — RONY-14 Scan now', () => {
         currency: 'ILS',
         localFilePath: 'C:/Docs/Rony Invoices/a.pdf',
         emailBody: null,
+        generated: false,
         status: 'downloaded',
         engineType: 'deterministic',
         createdAt: '2026-05-01T00:00:00Z'

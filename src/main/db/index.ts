@@ -16,6 +16,7 @@ interface InvoiceRow {
   currency: string | null
   local_file_path: string | null
   email_body: string | null
+  generated: number
   status: Invoice['status']
   engine_type: Invoice['engineType']
   created_at: string
@@ -32,6 +33,7 @@ function rowToInvoice(row: InvoiceRow): Invoice {
     currency: row.currency,
     localFilePath: row.local_file_path,
     emailBody: row.email_body ?? null,
+    generated: row.generated === 1,
     status: row.status,
     engineType: row.engine_type,
     createdAt: row.created_at
@@ -62,6 +64,7 @@ export function initDatabase(): Database.Database {
       currency        TEXT,
       local_file_path TEXT,
       email_body      TEXT,
+      generated       INTEGER NOT NULL DEFAULT 0,
       status          TEXT NOT NULL DEFAULT 'pending',
       engine_type     TEXT NOT NULL,
       created_at      TEXT NOT NULL DEFAULT (datetime('now'))
@@ -88,6 +91,9 @@ export function initDatabase(): Database.Database {
   if (!columns.some((c) => c.name === 'email_body')) {
     db.exec(`ALTER TABLE invoices ADD COLUMN email_body TEXT`)
   }
+  if (!columns.some((c) => c.name === 'generated')) {
+    db.exec(`ALTER TABLE invoices ADD COLUMN generated INTEGER NOT NULL DEFAULT 0`)
+  }
 
   // Clean up junk left by earlier builds whose startup self-test inserted a
   // "Self-Test Vendor" row on every launch (now removed at insert time).
@@ -102,12 +108,17 @@ function getDb(): Database.Database {
   return db
 }
 
+/** better-sqlite3 can't bind booleans — map `generated` to 0/1 for the run(). */
+function toBindParams(invoice: NewInvoice): Record<string, unknown> {
+  return { ...invoice, generated: invoice.generated ? 1 : 0 }
+}
+
 export function insertInvoice(invoice: NewInvoice): Invoice {
   const stmt = getDb().prepare(`
-    INSERT INTO invoices (message_id, date, date_source, vendor, amount, currency, local_file_path, email_body, status, engine_type)
-    VALUES (@messageId, @date, @dateSource, @vendor, @amount, @currency, @localFilePath, @emailBody, @status, @engineType)
+    INSERT INTO invoices (message_id, date, date_source, vendor, amount, currency, local_file_path, email_body, generated, status, engine_type)
+    VALUES (@messageId, @date, @dateSource, @vendor, @amount, @currency, @localFilePath, @emailBody, @generated, @status, @engineType)
   `)
-  const info = stmt.run(invoice)
+  const info = stmt.run(toBindParams(invoice))
   return getInvoiceById(Number(info.lastInsertRowid))!
 }
 
@@ -150,11 +161,11 @@ export function invoiceExistsByMessageId(messageId: string): boolean {
 export function tryInsertInvoice(invoice: NewInvoice): boolean {
   const info = getDb()
     .prepare(
-      `INSERT INTO invoices (message_id, date, date_source, vendor, amount, currency, local_file_path, email_body, status, engine_type)
-       VALUES (@messageId, @date, @dateSource, @vendor, @amount, @currency, @localFilePath, @emailBody, @status, @engineType)
+      `INSERT INTO invoices (message_id, date, date_source, vendor, amount, currency, local_file_path, email_body, generated, status, engine_type)
+       VALUES (@messageId, @date, @dateSource, @vendor, @amount, @currency, @localFilePath, @emailBody, @generated, @status, @engineType)
        ON CONFLICT(local_file_path) DO NOTHING`
     )
-    .run(invoice)
+    .run(toBindParams(invoice))
   return info.changes > 0
 }
 
@@ -201,6 +212,7 @@ export function runStartupSelfTest(): void {
     currency: 'ILS',
     localFilePath: null,
     emailBody: null,
+    generated: false,
     status: 'pending',
     engineType: 'deterministic'
   })

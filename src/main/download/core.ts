@@ -42,6 +42,18 @@ export interface DownloadDeps {
   targetDir: string
   /** Fetch an attachment's bytes by message + attachment id. */
   fetchAttachment: (messageId: string, attachmentId: string) => Promise<Buffer>
+  /**
+   * Render a body-only receipt's content into PDF bytes (Electron printToPDF).
+   * Optional + injected so the core stays pure/testable; when absent we fall
+   * back to a file-less row that keeps the email body for in-app viewing.
+   */
+  renderEmailPdf?: (data: {
+    vendor: string | null
+    amount: number | null
+    currency: string | null
+    date: string | null
+    body: string
+  }) => Promise<Buffer>
   store: InvoiceStore
 }
 
@@ -94,7 +106,8 @@ function buildInvoice(
   email: ParsedEmail,
   engineType: EngineType,
   extracted: ExtractedFields | undefined,
-  localFilePath: string | null
+  localFilePath: string | null,
+  generated = false
 ): NewInvoice {
   return {
     messageId: email.id,
@@ -105,9 +118,10 @@ function buildInvoice(
     amount: extracted?.amount ?? null,
     currency: extracted?.currency ?? null,
     localFilePath,
-    // Keep the email body only for file-less (body-only) rows, so the user can
-    // view the receipt content that lives inside the message.
+    // Keep the raw body only when there's no file (the fallback path) so the
+    // user can still view it; once a (generated) PDF exists, the body is in it.
     emailBody: localFilePath ? null : email.bodyText,
+    generated,
     status: 'downloaded',
     engineType
   }
@@ -220,8 +234,10 @@ export async function downloadApproved(
   })
 
   // Body-only receipts: approved emails with NO in-scope attachment are real
-  // invoices printed in the email body. Record a file-less row, deduped by
-  // message id (there's no file path to key on).
+  // invoices printed in the email body. We turn each into a generated PDF so it
+  // becomes a first-class, openable/exportable file; if PDF rendering isn't
+  // available (or fails), we fall back to a file-less row that keeps the body.
+  // Deduped by message id (there's no original file path to key on).
   for (const { email, engineType, extracted } of approved) {
     const hasDoc = email.attachments.some((a) => a.attachmentId && isInScope(a))
     if (hasDoc) continue
@@ -229,7 +245,27 @@ export async function downloadApproved(
       summary.skipped++
       continue
     }
-    if (deps.store.insert(buildInvoice(email, engineType, extracted, null))) summary.downloaded++
+
+    let invoice = buildInvoice(email, engineType, extracted, null) // fallback (file-less)
+    if (deps.renderEmailPdf) {
+      try {
+        const pdf = await deps.renderEmailPdf({
+          vendor: extracted?.vendor ?? null,
+          amount: extracted?.amount ?? null,
+          currency: extracted?.currency ?? null,
+          date: extracted?.date ?? email.date,
+          body: email.bodyText
+        })
+        const targetPath = join(deps.targetDir, `${email.id}__email.pdf`)
+        await writeFile(targetPath, pdf)
+        invoice = buildInvoice(email, engineType, extracted, targetPath, true)
+      } catch (e) {
+        summary.firstError ??= e instanceof Error ? e.message : String(e)
+        console.error(`[pdf] generation failed for ${email.id} (keeping body-only):`, e)
+      }
+    }
+
+    if (deps.store.insert(invoice)) summary.downloaded++
     else summary.skipped++
   }
 
