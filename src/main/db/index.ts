@@ -130,6 +130,12 @@ export function invoiceExistsByPath(localFilePath: string): boolean {
   return row !== undefined
 }
 
+/** True if any row already exists for this Gmail message id (body-only dedup). */
+export function invoiceExistsByMessageId(messageId: string): boolean {
+  const row = getDb().prepare('SELECT 1 FROM invoices WHERE message_id = ? LIMIT 1').get(messageId)
+  return row !== undefined
+}
+
 /**
  * Insert an invoice, but do nothing if a row with the same `local_file_path`
  * already exists (RONY-11). Returns true if a new row was inserted, false if it
