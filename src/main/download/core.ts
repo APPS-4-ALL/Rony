@@ -50,6 +50,7 @@ export interface DownloadDeps {
    */
   renderEmailPdf?: (data: {
     vendor: string | null
+    subject: string | null
     amount: number | null
     currency: string | null
     date: string | null
@@ -77,6 +78,15 @@ const MIN_IMAGE_BYTES = 8 * 1024
 
 /** How many attachments to download at once (matches RONY-7's fetch concurrency). */
 const DOWNLOAD_CONCURRENCY = 5
+
+/** How many body-only PDFs to render at once — each is a real offscreen window. */
+const BODY_PDF_CONCURRENCY = 3
+
+/**
+ * Body cap for the GENERATED PDF — generous, since that text IS the document
+ * (the in-app popup uses cleanReceiptBody's smaller default).
+ */
+const PDF_BODY_MAX_LENGTH = 20000
 
 /** Make a Gmail filename safe to use as a local file name. */
 export function sanitizeFilename(name: string): string {
@@ -250,37 +260,43 @@ export async function downloadApproved(
   // would produce a near-empty row (no vendor/amount) from possibly-incidental
   // keywords (e.g. "קבלה" also means "reception"). We therefore record body-only
   // receipts only when the AI judged the email financial.
-  for (const { email, engineType, extracted } of approved) {
-    if (engineType !== 'ai') continue
-    const hasDoc = email.attachments.some((a) => a.attachmentId && isInScope(a))
-    if (hasDoc) continue
-    if (deps.store.existsByMessageId(email.id)) {
-      summary.skipped++
-      continue
-    }
-
-    let invoice = buildInvoice(email, engineType, extracted, null) // fallback (file-less)
-    if (deps.renderEmailPdf) {
-      try {
-        const pdf = await deps.renderEmailPdf({
-          vendor: extracted?.vendor ?? null,
-          amount: extracted?.amount ?? null,
-          currency: extracted?.currency ?? null,
-          date: extracted?.date ?? email.date,
-          body: cleanReceiptBody(email.bodyText)
-        })
-        const targetPath = join(deps.targetDir, `${email.id}__email.pdf`)
-        await writeFile(targetPath, pdf)
-        invoice = buildInvoice(email, engineType, extracted, targetPath, true)
-      } catch (e) {
-        summary.firstError ??= e instanceof Error ? e.message : String(e)
-        console.error(`[pdf] generation failed for ${email.id} (keeping body-only):`, e)
+  const bodyOnly = approved.filter(
+    ({ email, engineType }) =>
+      engineType === 'ai' && !email.attachments.some((a) => a.attachmentId && isInScope(a))
+  )
+  await runWithConcurrency(
+    bodyOnly,
+    BODY_PDF_CONCURRENCY,
+    async ({ email, engineType, extracted }) => {
+      if (deps.store.existsByMessageId(email.id)) {
+        summary.skipped++
+        return
       }
-    }
 
-    if (deps.store.insert(invoice)) summary.downloaded++
-    else summary.skipped++
-  }
+      let invoice = buildInvoice(email, engineType, extracted, null) // fallback (file-less)
+      if (deps.renderEmailPdf) {
+        try {
+          const pdf = await deps.renderEmailPdf({
+            vendor: extracted?.vendor ?? null,
+            subject: email.subject,
+            amount: extracted?.amount ?? null,
+            currency: extracted?.currency ?? null,
+            date: extracted?.date ?? email.date,
+            body: cleanReceiptBody(email.bodyText, PDF_BODY_MAX_LENGTH)
+          })
+          const targetPath = join(deps.targetDir, `${email.id}__email.pdf`)
+          await writeFile(targetPath, pdf)
+          invoice = buildInvoice(email, engineType, extracted, targetPath, true)
+        } catch (e) {
+          summary.firstError ??= e instanceof Error ? e.message : String(e)
+          console.error(`[pdf] generation failed for ${email.id} (keeping body-only):`, e)
+        }
+      }
+
+      if (deps.store.insert(invoice)) summary.downloaded++
+      else summary.skipped++
+    }
+  )
 
   return summary
 }

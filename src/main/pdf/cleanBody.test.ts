@@ -45,9 +45,31 @@ describe('cleanReceiptBody', () => {
     expect(cleanReceiptBody('חשבונית [cid:logo@x] מצורפת')).toBe('חשבונית  מצורפת')
   })
 
-  it('caps an extremely long body', () => {
+  it('cuts a Gmail/Apple "On … wrote:" reply boundary', () => {
+    const raw = [
+      'תודה, התשלום בוצע.',
+      'On Mon, Jun 1, 2026 at 3:00 PM, Vendor <v@x.com> wrote:',
+      '> original message here'
+    ].join('\n')
+    expect(cleanReceiptBody(raw)).toBe('תודה, התשלום בוצע.')
+  })
+
+  it('cuts a Hebrew Gmail "… כתב/ה:" reply boundary', () => {
+    const raw = ['קיבלנו את הזמנתך.', 'בתאריך 1 ביוני 2026, ספק כלשהו כתב/ה:', 'הודעה מקורית'].join(
+      '\n'
+    )
+    expect(cleanReceiptBody(raw)).toBe('קיבלנו את הזמנתך.')
+  })
+
+  it('caps an extremely long body at the default length', () => {
     const out = cleanReceiptBody('א'.repeat(5000))
     expect(out.length).toBeLessThanOrEqual(2001) // 2000 chars + the … ellipsis
     expect(out.endsWith('…')).toBe(true)
+  })
+
+  it('honours a custom (larger) cap for the generated PDF', () => {
+    const out = cleanReceiptBody('א'.repeat(5000), 4000)
+    expect(out.length).toBeLessThanOrEqual(4001)
+    expect(out.length).toBeGreaterThan(2001) // not clamped to the default
   })
 })

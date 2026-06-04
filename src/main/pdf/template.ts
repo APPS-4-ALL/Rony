@@ -6,6 +6,8 @@
 
 export interface EmailPdfData {
   vendor: string | null
+  /** The email subject — often the cleanest one-line summary of the receipt. */
+  subject: string | null
   amount: number | null
   currency: string | null
   /** ISO date (YYYY-MM-DD) shown in the header. */
@@ -37,6 +39,7 @@ export const PROVENANCE_NOTICE =
 /** Build the self-contained, RTL HTML for one receipt. */
 export function buildReceiptHtml(d: EmailPdfData): string {
   const vendor = escapeHtml(d.vendor ?? 'חשבונית')
+  const subject = d.subject?.trim() ? escapeHtml(d.subject.trim()) : ''
   const date = escapeHtml(d.date ?? '—')
   const amount = escapeHtml(formatAmount(d.amount, d.currency))
   const body = escapeHtml(d.body)
@@ -49,6 +52,7 @@ export function buildReceiptHtml(d: EmailPdfData): string {
   body { font-family: "Segoe UI", Arial, sans-serif; color: #0f172a; margin: 0; padding: 32px 36px; }
   .head { border-bottom: 2px solid #10b981; padding-bottom: 14px; margin-bottom: 18px; }
   .vendor { font-size: 22px; font-weight: 700; }
+  .subject { margin-top: 4px; font-size: 14px; color: #334155; }
   .meta { margin-top: 8px; display: flex; gap: 28px; font-size: 13px; color: #475569; }
   .meta b { color: #0f172a; font-weight: 600; }
   .amount { color: #047857; }
@@ -59,6 +63,7 @@ export function buildReceiptHtml(d: EmailPdfData): string {
 <body>
   <div class="head">
     <div class="vendor">${vendor}</div>
+    ${subject ? `<div class="subject">${subject}</div>` : ''}
     <div class="meta">
       <span>תאריך: <b>${date}</b></span>
       <span>סכום: <b class="amount">${amount}</b></span>
