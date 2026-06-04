@@ -10,7 +10,10 @@ import type { AiProvider, EngineType, Settings } from '../../shared/types'
 export const DEFAULT_SETTINGS: Settings = {
   defaultEngine: 'deterministic',
   aiProvider: 'openai',
-  downloadDir: null
+  downloadDir: null,
+  // Privacy: the AI engine is OPT-IN. Until the user accepts the consent dialog,
+  // no email content is sent to a third-party AI provider.
+  aiConsent: false
 }
 
 /** Type guard for the scan-engine union. */
@@ -39,4 +42,13 @@ export function coerceAiProvider(value: unknown): AiProvider {
  */
 export function coerceDownloadDir(value: unknown): string | null {
   return typeof value === 'string' && value.trim() !== '' ? value : null
+}
+
+/**
+ * Coerce a raw/stored AI-consent value to a strict boolean. Consent is stored as
+ * the string '1' (true) / '0' (false); ANY other value reads as `false`, so a
+ * missing or corrupt entry safely defaults to "not consented" (privacy-first).
+ */
+export function coerceAiConsent(value: unknown): boolean {
+  return value === true || value === '1'
 }

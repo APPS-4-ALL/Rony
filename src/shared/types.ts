@@ -78,6 +78,15 @@ export interface Settings {
    * use the default (`Documents/Rony Invoices`).
    */
   downloadDir: string | null
+  /**
+   * Explicit opt-in to the AI engine's PRIVACY trade-off: that email text and
+   * attachments leave the machine and are sent to a third-party AI provider
+   * (OpenAI/Gemini). Defaults to `false`. The UI requires the user to accept a
+   * consent dialog before the AI engine can be selected, and the main process
+   * refuses to run an AI scan unless this is `true` (defense in depth — the
+   * untrusted renderer cannot bypass it).
+   */
+  aiConsent: boolean
 }
 
 /**

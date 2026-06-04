@@ -146,7 +146,16 @@ export function registerIpcHandlers(): void {
     }
 
     // Use the user's persisted engine + provider choice (RONY-12/16).
-    const { defaultEngine: engine, aiProvider } = getSettings()
+    const { defaultEngine: engine, aiProvider, aiConsent } = getSettings()
+
+    // PRIVACY GATE (defense in depth): the AI engine sends email text +
+    // attachments to a third-party provider, so it must NOT run without the
+    // user's explicit opt-in. The UI gates this behind a consent dialog, but the
+    // renderer is untrusted — we re-check here so a bypassed/compromised UI can
+    // never trigger an AI scan. Deterministic scans are fully local and exempt.
+    if (engine === 'ai' && !aiConsent) {
+      throw new Error('סריקת AI דורשת אישור שליחת תוכן המיילים לספק חיצוני. אשר/י זאת בהגדרות.')
+    }
 
     // Prefer the user's stored key (RONY-16); undefined → the engine falls back
     // to a .env key (dev). Fail fast before fetching if neither is available.

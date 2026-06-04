@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  coerceAiConsent,
   coerceAiProvider,
   coerceDefaultEngine,
   coerceDownloadDir,
@@ -46,5 +47,15 @@ describe('settings validation', () => {
     expect(coerceDownloadDir(null)).toBeNull()
     expect(coerceDownloadDir(42)).toBeNull()
     expect(DEFAULT_SETTINGS.downloadDir).toBeNull()
+  })
+
+  it('defaults AI consent to false and only accepts true/"1" (privacy-first)', () => {
+    expect(DEFAULT_SETTINGS.aiConsent).toBe(false)
+    expect(coerceAiConsent('1')).toBe(true)
+    expect(coerceAiConsent(true)).toBe(true)
+    expect(coerceAiConsent('0')).toBe(false)
+    expect(coerceAiConsent('true')).toBe(false) // only '1'/true count
+    expect(coerceAiConsent(undefined)).toBe(false)
+    expect(coerceAiConsent(null)).toBe(false)
   })
 })

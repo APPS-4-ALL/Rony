@@ -1,16 +1,28 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import type { AiProvider, AuthStatus, EngineType, Settings } from '@shared/types'
-import { connectionDisplay, ENGINE_OPTIONS, PROVIDER_OPTIONS } from '../lib/settingsView'
+import {
+  AI_CONSENT_POINTS,
+  AI_CONSENT_TITLE,
+  connectionDisplay,
+  ENGINE_OPTIONS,
+  PROVIDER_OPTIONS
+} from '../lib/settingsView'
 
 const status = ref<AuthStatus>({ connected: false, email: null })
 const settings = ref<Settings>({
   defaultEngine: 'deterministic',
   aiProvider: 'openai',
-  downloadDir: null
+  downloadDir: null,
+  aiConsent: false
 })
 const busy = ref(false)
 const error = ref('')
+
+// Privacy consent dialog — shown when enabling the AI engine without prior opt-in.
+const consentPoints = AI_CONSENT_POINTS
+const consentTitle = AI_CONSENT_TITLE
+const showConsent = ref(false)
 
 // --- RONY-16: API key state ---
 const apiKeyInput = ref('')
@@ -68,7 +80,42 @@ const onLogout = (): Promise<void> =>
 
 const selectEngine = (engine: EngineType): Promise<void> =>
   guarded(async () => {
+    // Privacy: enabling the AI engine requires explicit opt-in. If the user
+    // hasn't consented yet, open the consent dialog instead of switching — the
+    // switch happens only on confirm (see confirmConsent). Already-consented
+    // users (and switching back to deterministic) proceed immediately.
+    if (engine === 'ai' && !settings.value.aiConsent) {
+      showConsent.value = true
+      return
+    }
     settings.value = await window.api.settings.set({ defaultEngine: engine })
+    await refreshKeyStatus()
+  })
+
+/** Consent accepted → record it AND switch to the AI engine in one update. */
+const confirmConsent = (): Promise<void> =>
+  guarded(async () => {
+    settings.value = await window.api.settings.set({ defaultEngine: 'ai', aiConsent: true })
+    showConsent.value = false
+    await refreshKeyStatus()
+  })
+
+/** Consent declined → leave the engine unchanged. */
+function cancelConsent(): void {
+  showConsent.value = false
+}
+
+/**
+ * Revoke AI consent. Since the AI engine cannot run without consent, we also
+ * switch the default engine back to the local deterministic one in the same
+ * update, so the app is never left in an "AI selected but not allowed" state.
+ */
+const revokeConsent = (): Promise<void> =>
+  guarded(async () => {
+    settings.value = await window.api.settings.set({
+      aiConsent: false,
+      defaultEngine: 'deterministic'
+    })
     await refreshKeyStatus()
   })
 
@@ -278,10 +325,63 @@ onMounted(() => guarded(load))
             : 'אין עדיין מפתח שמור — מנוע ה-AI זקוק לאחד כדי לפעול.'
         }}
       </p>
+
+      <!-- Privacy consent status + revoke (RONY-10 privacy) -->
+      <div class="mt-5 border-t border-slate-800 pt-4">
+        <p class="text-sm text-emerald-400">✓ אישרת שליחת תוכן מיילים לספק ה-AI.</p>
+        <p class="mt-1 text-xs text-slate-500">
+          מזהים רגישים (טלפון, דוא"ל, מספרי חשבון/כרטיס, ת"ז) מוסתרים אוטומטית מהטקסט לפני השליחה.
+        </p>
+        <button
+          class="mt-2 rounded-lg border border-slate-700 px-3 py-1.5 text-sm font-medium text-slate-200 transition hover:border-red-500 hover:text-red-300 disabled:opacity-50"
+          :disabled="busy"
+          @click="revokeConsent"
+        >
+          ביטול הסכמה ומעבר לסריקה רגילה
+        </button>
+      </div>
     </section>
 
     <p v-if="error" class="rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">
       {{ error }}
     </p>
+
+    <!-- Consent dialog: shown when enabling the AI engine without prior opt-in.
+         The AI engine cannot be selected (UI) nor run (main process) until the
+         user accepts this. -->
+    <div
+      v-if="showConsent"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4"
+      @click.self="cancelConsent"
+    >
+      <div class="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+        <h3 class="text-lg font-bold text-slate-100">{{ consentTitle }}</h3>
+        <p class="mt-2 text-sm text-slate-400">
+          הסריקה החכמה משתמשת בשירות חיצוני. לפני ההפעלה, חשוב שתדע/י:
+        </p>
+        <ul class="mt-3 space-y-2 text-sm text-slate-300">
+          <li v-for="(point, i) in consentPoints" :key="i" class="flex gap-2">
+            <span class="mt-1 text-emerald-400">•</span>
+            <span>{{ point }}</span>
+          </li>
+        </ul>
+        <div class="mt-6 flex flex-wrap justify-end gap-2">
+          <button
+            class="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-slate-500 disabled:opacity-50"
+            :disabled="busy"
+            @click="cancelConsent"
+          >
+            ביטול
+          </button>
+          <button
+            class="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-50"
+            :disabled="busy"
+            @click="confirmConsent"
+          >
+            אני מאשר/ת — הפעל סריקה חכמה
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
