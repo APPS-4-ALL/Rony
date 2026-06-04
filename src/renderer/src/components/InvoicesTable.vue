@@ -11,9 +11,18 @@ import {
   type SortKey
 } from '../lib/invoiceTable'
 
-const props = defineProps<{ invoices: Invoice[] }>()
+const props = defineProps<{
+  invoices: Invoice[]
+  /** IDs added by the latest scan — these rows get a "חדש" highlight. */
+  newIds?: Set<number>
+}>()
 /** Tell the parent to reload after a row is deleted (it owns the list). */
 const emit = defineEmits<{ deleted: [] }>()
+
+/** Whether a row was just added by the most recent scan. */
+function isNew(inv: Invoice): boolean {
+  return props.newIds?.has(inv.id) ?? false
+}
 
 const search = ref('')
 const sortKey = ref<SortKey>('date')
@@ -173,7 +182,12 @@ async function exportCsv(): Promise<void> {
         </tr>
       </thead>
       <tbody class="divide-y divide-slate-800">
-        <tr v-for="inv in rows" :key="inv.id" class="hover:bg-slate-800/40">
+        <tr
+          v-for="inv in rows"
+          :key="inv.id"
+          class="transition-colors hover:bg-slate-800/40"
+          :class="isNew(inv) ? 'bg-emerald-500/10' : ''"
+        >
           <td class="whitespace-nowrap py-2 px-3 text-slate-400">
             <span
               class="inline-flex items-center justify-center gap-1.5"
@@ -211,7 +225,17 @@ async function exportCsv(): Promise<void> {
               </svg>
             </span>
           </td>
-          <td class="py-2 px-3">{{ inv.vendor ?? '—' }}</td>
+          <td class="py-2 px-3">
+            <span class="inline-flex items-center justify-center gap-1.5">
+              {{ inv.vendor ?? '—' }}
+              <span
+                v-if="isNew(inv)"
+                class="rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300"
+              >
+                חדש
+              </span>
+            </span>
+          </td>
           <td class="py-2 px-3 font-mono">{{ formatAmount(inv.amount, inv.currency) }}</td>
           <td class="py-2 px-3">
             <span

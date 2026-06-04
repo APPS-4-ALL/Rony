@@ -23,6 +23,8 @@ const tabs = [
 ] as const
 
 const invoices = ref<Invoice[]>([])
+/** IDs of invoices added by the most recent scan, so the table can mark them. */
+const newInvoiceIds = ref<Set<number>>(new Set())
 
 // --- RONY-14 + scan robustness: Scan now, live progress ---
 const scanning = ref(false)
@@ -62,9 +64,15 @@ async function onScan(): Promise<void> {
   scanError.value = ''
   scanSummary.value = null
   scanProgress.value = null
+  newInvoiceIds.value = new Set() // clear last run's highlights
+  // Remember what was already there so we can mark whatever the scan adds.
+  const before = new Set(invoices.value.map((inv) => inv.id))
   try {
     scanSummary.value = await window.api.scan.run(scanOptions())
     await refresh()
+    newInvoiceIds.value = new Set(
+      invoices.value.filter((inv) => !before.has(inv.id)).map((inv) => inv.id)
+    )
   } catch (e) {
     scanError.value = e instanceof Error ? e.message : String(e)
   } finally {
@@ -291,7 +299,7 @@ onUnmounted(() => unsubscribeProgress?.())
 
         <!-- Invoices dashboard table (RONY-13) — renders directly from SQLite -->
         <div class="mt-6">
-          <InvoicesTable :invoices="invoices" @deleted="reloadInvoices" />
+          <InvoicesTable :invoices="invoices" :new-ids="newInvoiceIds" @deleted="reloadInvoices" />
         </div>
       </template>
     </div>

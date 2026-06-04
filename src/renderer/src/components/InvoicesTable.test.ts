@@ -203,4 +203,19 @@ describe('InvoicesTable.vue', () => {
     expect(titles).toContain('תאריך מהחשבונית')
     expect(titles).toContain('תאריך קבלת המייל')
   })
+
+  it('marks rows added by the latest scan with a "חדש" highlight', () => {
+    const wrapper = mount(InvoicesTable, {
+      props: {
+        invoices: [inv({ id: 1, vendor: 'Old' }), inv({ id: 2, vendor: 'Fresh' })],
+        newIds: new Set([2])
+      }
+    })
+    const rows = wrapper.findAll('tbody tr')
+    const newRow = rows.find((r) => r.text().includes('Fresh'))!
+    const oldRow = rows.find((r) => r.text().includes('Old'))!
+    expect(newRow.text()).toContain('חדש')
+    expect(newRow.classes()).toContain('bg-emerald-500/10')
+    expect(oldRow.text()).not.toContain('חדש')
+  })
 })
