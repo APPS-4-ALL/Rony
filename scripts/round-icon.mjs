@@ -22,7 +22,8 @@ import { Jimp } from 'jimp'
 import pngToIco from 'png-to-ico'
 
 const SOURCE = 'resources/icon-source.png'
-const ZOOM = Number(process.env.ICON_ZOOM || 1.25)
+// Gentle zoom to trim the art's outer margin/frame; 1 = no zoom.
+const ZOOM = Number(process.env.ICON_ZOOM || 1.12)
 
 /** Crop a centered square that is `1/ZOOM` of the canvas, then scale back up. */
 function zoomToSubject(image, zoom) {
@@ -35,19 +36,23 @@ function zoomToSubject(image, zoom) {
 }
 
 /**
- * Zero the alpha outside the largest inscribed circle, with a ~1px antialiased
- * edge so the rim is smooth rather than jagged. Mutates the bitmap in place.
+ * Zero the alpha outside a ROUNDED RECTANGLE (the modern app-icon shape), with a
+ * ~1px antialiased edge. We use a rounded square rather than a circle so the
+ * full character + receipt stay in frame (a circle would clip the receipt and
+ * his hands). Mutates the bitmap in place.
  */
-function maskCircle(image) {
+function maskRoundedRect(image, radiusFraction = 0.18) {
   const { data, width, height } = image.bitmap
-  const cx = (width - 1) / 2
-  const cy = (height - 1) / 2
-  const radius = Math.min(width, height) / 2
+  const r = Math.min(width, height) * radiusFraction
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      const edge = radius - Math.hypot(x - cx, y - cy) // >1 inside, <0 outside
-      if (edge >= 1) continue // fully inside — leave opaque
+      // How far the pixel sits INTO a corner zone (0 along the straight edges).
+      const dx = Math.max(r - x, x - (width - 1 - r), 0)
+      const dy = Math.max(r - y, y - (height - 1 - r), 0)
+      if (dx === 0 || dy === 0) continue // straight edge / interior — opaque
+      const edge = r - Math.hypot(dx, dy) // >1 inside the arc, <0 outside
+      if (edge >= 1) continue
       const factor = Math.max(0, Math.min(1, edge)) // 0..1 across the rim
       const alphaIdx = (y * width + x) * 4 + 3
       data[alphaIdx] = Math.round(data[alphaIdx] * factor)
@@ -62,10 +67,11 @@ async function pngAt(master, size) {
 
 const master = await Jimp.fromBuffer(await readFile(SOURCE))
 zoomToSubject(master, ZOOM)
-maskCircle(master)
+maskRoundedRect(master)
 
-// 1) Runtime icon (1024², what the dev taskbar/window shows).
-await writeFile('resources/icon.png', await master.getBuffer('image/png'))
+// 1) Runtime icon (512², what the dev taskbar/window shows — plenty for any
+// icon size, and keeps the file small vs. the multi-MB source art).
+await writeFile('resources/icon.png', await pngAt(master, 512))
 
 // 2) electron-builder PNG source (512²).
 await writeFile('build/icon.png', await pngAt(master, 512))
