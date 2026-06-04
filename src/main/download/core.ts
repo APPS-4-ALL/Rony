@@ -93,6 +93,10 @@ export function sanitizeFilename(name: string): string {
 function isInScope(att: GmailAttachmentRef): boolean {
   if (!isInvoiceDocument(att)) return false
   const isImage = att.mimeType.toLowerCase().startsWith('image/')
+  // Inline images are signature/logo art embedded in the body via `cid:` — never
+  // the invoice itself — so skip them regardless of size (logos can exceed the
+  // size gate below). PDFs are kept even if inline (a real document either way).
+  if (isImage && att.inline) return false
   if (isImage && att.size > 0 && att.size < MIN_IMAGE_BYTES) return false
   return true
 }

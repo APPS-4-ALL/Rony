@@ -13,6 +13,7 @@ function att(over: Partial<GmailAttachmentRef> = {}): GmailAttachmentRef {
     mimeType: 'application/pdf',
     attachmentId: 'a1',
     size: 1024,
+    inline: false,
     ...over
   }
 }
@@ -95,6 +96,34 @@ describe('pickInvoiceAttachment', () => {
       mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     })
     expect(pickInvoiceAttachment([docx])).toBeNull()
+  })
+
+  it('skips an inline logo image (never sends a signature logo to the model)', () => {
+    const logo = att({
+      filename: 'logo.png',
+      mimeType: 'image/png',
+      attachmentId: 'LOGO',
+      size: 60_000,
+      inline: true
+    })
+    expect(pickInvoiceAttachment([logo])).toBeNull()
+  })
+
+  it('prefers a real attachment image over an inline logo', () => {
+    const logo = att({
+      filename: 'logo.png',
+      mimeType: 'image/png',
+      attachmentId: 'LOGO',
+      size: 90_000,
+      inline: true
+    })
+    const scan = att({
+      filename: 'receipt.jpg',
+      mimeType: 'image/jpeg',
+      attachmentId: 'SCAN',
+      size: 40_000
+    })
+    expect(pickInvoiceAttachment([logo, scan])).toBe(scan)
   })
 
   it('skips files larger than the inline cap', () => {

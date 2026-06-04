@@ -72,6 +72,9 @@ export function pickInvoiceAttachment(
     (a) =>
       a.attachmentId !== null &&
       isVisionSupported(a) &&
+      // Skip inline signature/logo images — they'd otherwise win the "largest
+      // image" fallback below and get sent to the model instead of the invoice.
+      !(a.inline && visionMimeType(a) !== 'application/pdf') &&
       (a.size === 0 || a.size <= MAX_VISION_BYTES)
   )
   if (usable.length === 0) return null
