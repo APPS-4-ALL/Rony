@@ -48,7 +48,8 @@ afterEach(() => {
 
 /** Vendor cell (2nd column) text for every rendered body row, in order. */
 function vendorOrder(wrapper: ReturnType<typeof mount>): string[] {
-  return wrapper.findAll('tbody tr').map((tr) => tr.findAll('td')[1].text())
+  // Cells: [0] marker, [1] date, [2] vendor, …
+  return wrapper.findAll('tbody tr').map((tr) => tr.findAll('td')[2].text())
 }
 
 describe('InvoicesTable.vue', () => {
@@ -78,7 +79,7 @@ describe('InvoicesTable.vue', () => {
     // Map each row's vendor → whether its Open-file button is disabled.
     const state = new Map(
       wrapper.findAll('tbody tr').map((tr) => {
-        const vendor = tr.findAll('td')[1].text()
+        const vendor = tr.findAll('td')[2].text()
         const disabled = (tr.find('button').element as HTMLButtonElement).disabled
         return [vendor, disabled] as const
       })
@@ -202,5 +203,35 @@ describe('InvoicesTable.vue', () => {
       .map((tr) => tr.find('td span[title]').attributes('title'))
     expect(titles).toContain('תאריך מהחשבונית')
     expect(titles).toContain('תאריך קבלת המייל')
+  })
+
+  it('tints rows added by the latest scan and badges them while showBadge is on', () => {
+    const wrapper = mount(InvoicesTable, {
+      props: {
+        invoices: [inv({ id: 1, vendor: 'Old' }), inv({ id: 2, vendor: 'Fresh' })],
+        newIds: new Set([2]),
+        showBadge: true
+      }
+    })
+    const rows = wrapper.findAll('tbody tr')
+    const newRow = rows.find((r) => r.text().includes('Fresh'))!
+    const oldRow = rows.find((r) => r.text().includes('Old'))!
+    expect(newRow.classes()).toContain('bg-emerald-500/10') // tint
+    expect(newRow.text()).toContain('חדש') // badge
+    expect(oldRow.classes()).not.toContain('bg-emerald-500/10')
+    expect(oldRow.text()).not.toContain('חדש')
+  })
+
+  it('keeps the tint but drops the badge once showBadge is off (after the flash)', () => {
+    const wrapper = mount(InvoicesTable, {
+      props: {
+        invoices: [inv({ id: 2, vendor: 'Fresh' })],
+        newIds: new Set([2]),
+        showBadge: false
+      }
+    })
+    const row = wrapper.find('tbody tr')
+    expect(row.classes()).toContain('bg-emerald-500/10') // still tinted
+    expect(row.text()).not.toContain('חדש') // badge gone
   })
 })

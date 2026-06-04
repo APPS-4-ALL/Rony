@@ -11,9 +11,25 @@ import {
   type SortKey
 } from '../lib/invoiceTable'
 
-const props = defineProps<{ invoices: Invoice[] }>()
+const props = defineProps<{
+  invoices: Invoice[]
+  /** IDs added by the latest scan — these rows get a green tint (until next scan). */
+  newIds?: Set<number>
+  /** Whether to show the transient "חדש" badge on those rows (it fades after a bit). */
+  showBadge?: boolean
+}>()
 /** Tell the parent to reload after a row is deleted (it owns the list). */
 const emit = defineEmits<{ deleted: [] }>()
+
+/** Whether a row was just added by the most recent scan (drives the tint). */
+function isNew(inv: Invoice): boolean {
+  return props.newIds?.has(inv.id) ?? false
+}
+
+/** Whether to show the "חדש" badge for a row (new AND still within the flash window). */
+function showBadgeFor(inv: Invoice): boolean {
+  return isNew(inv) && (props.showBadge ?? false)
+}
 
 const search = ref('')
 const sortKey = ref<SortKey>('date')
@@ -160,6 +176,8 @@ async function exportCsv(): Promise<void> {
     <table v-else class="mt-4 w-full text-center text-sm">
       <thead class="text-xs uppercase tracking-wide text-slate-500">
         <tr>
+          <!-- Leading marker column (the "חדש" badge aligns here) -->
+          <th class="w-12 py-2 px-2"></th>
           <th
             v-for="col in columns"
             :key="col.key"
@@ -173,7 +191,21 @@ async function exportCsv(): Promise<void> {
         </tr>
       </thead>
       <tbody class="divide-y divide-slate-800">
-        <tr v-for="inv in rows" :key="inv.id" class="hover:bg-slate-800/40">
+        <tr
+          v-for="inv in rows"
+          :key="inv.id"
+          class="transition-colors hover:bg-slate-800/40"
+          :class="isNew(inv) ? 'bg-emerald-500/10' : ''"
+        >
+          <!-- "חדש" marker, in its own column so the badges line up -->
+          <td class="w-12 px-2 py-2">
+            <span
+              v-if="showBadgeFor(inv)"
+              class="rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300"
+            >
+              חדש
+            </span>
+          </td>
           <td class="whitespace-nowrap py-2 px-3 text-slate-400">
             <span
               class="inline-flex items-center justify-center gap-1.5"

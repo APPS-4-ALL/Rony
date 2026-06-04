@@ -23,6 +23,11 @@ const tabs = [
 ] as const
 
 const invoices = ref<Invoice[]>([])
+/** IDs added by the most recent scan — rows stay tinted until the next scan. */
+const newInvoiceIds = ref<Set<number>>(new Set())
+/** The "חדש" badge shows only briefly (the row tint is the lasting marker). */
+const showNewBadge = ref(false)
+let badgeTimer: ReturnType<typeof setTimeout> | null = null
 
 // --- RONY-14 + scan robustness: Scan now, live progress ---
 const scanning = ref(false)
@@ -62,9 +67,23 @@ async function onScan(): Promise<void> {
   scanError.value = ''
   scanSummary.value = null
   scanProgress.value = null
+  // Clear last run's highlights (tint + badge) before starting.
+  newInvoiceIds.value = new Set()
+  showNewBadge.value = false
+  if (badgeTimer) clearTimeout(badgeTimer)
+  // Remember what was already there so we can mark whatever the scan adds.
+  const before = new Set(invoices.value.map((inv) => inv.id))
   try {
     scanSummary.value = await window.api.scan.run(scanOptions())
     await refresh()
+    newInvoiceIds.value = new Set(
+      invoices.value.filter((inv) => !before.has(inv.id)).map((inv) => inv.id)
+    )
+    if (newInvoiceIds.value.size > 0) {
+      // Flash the "חדש" badge for 10s; the row tint lingers until the next scan.
+      showNewBadge.value = true
+      badgeTimer = setTimeout(() => (showNewBadge.value = false), 10_000)
+    }
   } catch (e) {
     scanError.value = e instanceof Error ? e.message : String(e)
   } finally {
@@ -90,7 +109,10 @@ onMounted(() => {
   })
   reloadInvoices()
 })
-onUnmounted(() => unsubscribeProgress?.())
+onUnmounted(() => {
+  unsubscribeProgress?.()
+  if (badgeTimer) clearTimeout(badgeTimer)
+})
 </script>
 
 <template>
@@ -291,7 +313,12 @@ onUnmounted(() => unsubscribeProgress?.())
 
         <!-- Invoices dashboard table (RONY-13) — renders directly from SQLite -->
         <div class="mt-6">
-          <InvoicesTable :invoices="invoices" @deleted="reloadInvoices" />
+          <InvoicesTable
+            :invoices="invoices"
+            :new-ids="newInvoiceIds"
+            :show-badge="showNewBadge"
+            @deleted="reloadInvoices"
+          />
         </div>
       </template>
     </div>
