@@ -3,6 +3,7 @@
  *
  * The same prompt is used for every provider; only the transport differs.
  */
+import { redactPii } from './redact'
 import type { AiInput } from './types'
 
 /**
@@ -53,17 +54,23 @@ Rules:
 
 /** Build the per-email user message. The email is wrapped in explicit
  * delimiters so the model knows exactly where the content ends and does not
- * "continue the template" (which can trigger runaway repetition). */
+ * "continue the template" (which can trigger runaway repetition).
+ *
+ * PRIVACY: Subject + body are PII-redacted here (see ./redact) — this is the
+ * single chokepoint through which all provider/tier requests pass, so no
+ * high-confidence identifier (phone/email/account/card/ID) reaches the model.
+ * `From` is intentionally left as-is: the AI needs it to derive the vendor, and
+ * its disclosure is covered by the explicit user consent flow. */
 export function buildUserPrompt(input: AiInput): string {
   const filenames = input.filenames?.length ? input.filenames.join(', ') : '(none)'
   return [
     'Classify the email between the markers and return only the JSON object.',
     '<<<EMAIL',
     `From: ${input.from ?? '(unknown)'}`,
-    `Subject: ${input.subject}`,
+    `Subject: ${redactPii(input.subject)}`,
     `Attachments: ${filenames}`,
     '',
-    input.body,
+    redactPii(input.body),
     'EMAIL>>>'
   ].join('\n')
 }

@@ -7,18 +7,25 @@
  */
 import { getSetting, setSetting } from '../db'
 import type { Settings } from '../../shared/types'
-import { coerceAiProvider, coerceDefaultEngine, coerceDownloadDir } from './validate'
+import {
+  coerceAiConsent,
+  coerceAiProvider,
+  coerceDefaultEngine,
+  coerceDownloadDir
+} from './validate'
 
 const KEY_DEFAULT_ENGINE = 'defaultEngine'
 const KEY_AI_PROVIDER = 'aiProvider'
 const KEY_DOWNLOAD_DIR = 'downloadDir'
+const KEY_AI_CONSENT = 'aiConsent'
 
 /** Read the current settings, applying defaults for anything unset/invalid. */
 export function getSettings(): Settings {
   return {
     defaultEngine: coerceDefaultEngine(getSetting(KEY_DEFAULT_ENGINE)),
     aiProvider: coerceAiProvider(getSetting(KEY_AI_PROVIDER)),
-    downloadDir: coerceDownloadDir(getSetting(KEY_DOWNLOAD_DIR))
+    downloadDir: coerceDownloadDir(getSetting(KEY_DOWNLOAD_DIR)),
+    aiConsent: coerceAiConsent(getSetting(KEY_AI_CONSENT))
   }
 }
 
@@ -33,6 +40,10 @@ export function updateSettings(patch: Partial<Settings>): Settings {
   if (patch.downloadDir !== undefined) {
     // Store '' to mean "default"; coerceDownloadDir maps it back to null on read.
     setSetting(KEY_DOWNLOAD_DIR, coerceDownloadDir(patch.downloadDir) ?? '')
+  }
+  if (patch.aiConsent !== undefined) {
+    // Stored as '1'/'0' (see coerceAiConsent); anything else reads back as false.
+    setSetting(KEY_AI_CONSENT, coerceAiConsent(patch.aiConsent) ? '1' : '0')
   }
   return getSettings()
 }
