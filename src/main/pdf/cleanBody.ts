@@ -10,8 +10,8 @@
  * (no Electron/Node imports) so it stays cheap and safe.
  */
 
-/** Cap the cleaned body so a pathological email can't produce a giant PDF. */
-const MAX_LENGTH = 2000
+/** Default cap on the cleaned body (used for the in-app popup view). */
+export const DEFAULT_MAX_LENGTH = 2000
 
 /** A line that marks the start of quoted reply history (everything below it). */
 function isReplyBoundary(line: string): boolean {
@@ -21,7 +21,9 @@ function isReplyBoundary(line: string): boolean {
     /^>/.test(l) || // a quoted line
     /^(from|sent|to|cc|subject)\s*:/i.test(l) || // English reply header block
     /^(מאת|נשלח|אל|עותק|נושא)\s*:/.test(l) || // Hebrew reply header block
-    /^(get|קבל)\s+outlook/i.test(l) // mobile-app footer ("Get/קבל Outlook…")
+    /^(get|קבל)\s+outlook/i.test(l) || // mobile-app footer ("Get/קבל Outlook…")
+    /^on\b.*\bwrote:\s*$/i.test(l) || // Gmail/Apple Mail "On <date>, <name> wrote:"
+    /כתב(\/?ה)?\s*:\s*$/.test(l) // Hebrew Gmail "…, <name> כתב/ה:"
   )
 }
 
@@ -38,9 +40,11 @@ function isNoiseLine(line: string): boolean {
 
 /**
  * Keep the latest message of a reply thread and remove inline-image refs and
- * tracking-URL fragments. Returns trimmed text, capped at {@link MAX_LENGTH}.
+ * tracking-URL fragments. Returns trimmed text, capped at `maxLength`. The cap
+ * is generous for the generated PDF (the text IS the document) and tighter for
+ * the in-app popup; callers pass it explicitly.
  */
-export function cleanReceiptBody(body: string): string {
+export function cleanReceiptBody(body: string, maxLength: number = DEFAULT_MAX_LENGTH): string {
   const lines = body.split(/\r?\n/)
 
   // 1. Cut at the first reply boundary — everything after it is quoted history.
@@ -66,5 +70,5 @@ export function cleanReceiptBody(body: string): string {
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
-  return text.length > MAX_LENGTH ? `${text.slice(0, MAX_LENGTH).trimEnd()}…` : text
+  return text.length > maxLength ? `${text.slice(0, maxLength).trimEnd()}…` : text
 }

@@ -323,7 +323,10 @@ describe('downloadApproved — RONY-11 DoD', () => {
   it('renders a body-only receipt into a generated PDF when a renderer is given', async () => {
     const targetDir = tempDir()
     const store = fakeStore()
-    const renderEmailPdf = vi.fn(async () => Buffer.from('%PDF-1.4 fake'))
+    const renderEmailPdf = vi.fn(async (data: { subject: string | null }) => {
+      void data
+      return Buffer.from('%PDF-1.4 fake')
+    })
     const approved = [
       approvedEmail(
         [],
@@ -343,12 +346,45 @@ describe('downloadApproved — RONY-11 DoD', () => {
     })
 
     expect(renderEmailPdf).toHaveBeenCalledOnce()
+    expect(renderEmailPdf.mock.calls[0][0]).toMatchObject({ subject: 'חשבונית מס' }) // #5: subject passed
     expect(summary).toMatchObject({ downloaded: 1 })
     const row = store.rows[0]
     expect(row.generated).toBe(true)
     expect(row.localFilePath).toContain('msg1__email.pdf')
     expect(row.emailBody).toBeNull() // the body now lives in the generated PDF
     expect(existsSync(row.localFilePath as string)).toBe(true)
+  })
+
+  it('falls back to a file-less row when PDF rendering fails/hangs (the #1 timeout path)', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    // Simulate what the render timeout produces: a rejected promise.
+    const renderEmailPdf = vi.fn(async () => {
+      throw new Error('PDF print timed out after 8000ms')
+    })
+    const approved = [
+      approvedEmail(
+        [],
+        {
+          engineType: 'ai',
+          extracted: { vendor: 'X', amount: 10, currency: 'ILS', date: '2026-05-30' }
+        },
+        'סך הכל: 10'
+      )
+    ]
+
+    const summary = await downloadApproved(approved, {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      renderEmailPdf,
+      store
+    })
+
+    expect(summary).toMatchObject({ downloaded: 1 }) // row still recorded
+    const row = store.rows[0]
+    expect(row.generated).toBe(false) // no PDF
+    expect(row.localFilePath).toBeNull()
+    expect(row.emailBody).toBe('סך הכל: 10') // kept for the in-app popup
   })
 
   it('dedups a body-only receipt by message id on re-scan', async () => {
