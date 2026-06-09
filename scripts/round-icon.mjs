@@ -1,73 +1,33 @@
 /**
- * Build the app icon from the master art: optionally zoom into the subject
- * (the illustration has a lot of background, which makes the icon read small in
- * the taskbar), mask it into a circle (transparent corners), and regenerate
- * every asset electron-builder ships.
+ * Regenerate every app-icon asset from the transparent master.
  *
- * Source of truth: resources/icon-source.png (the untouched square art).
- * Idempotent — re-run with `npm run icon:round` whenever the source or ZOOM
- * changes. Tune the crop with `ICON_ZOOM` (e.g. ICON_ZOOM=1.3 npm run icon:round);
- * 1 = no zoom.
+ * Source of truth: resources/icon-source.png — a background-removed, tightly
+ * cropped square cutout of the character (produced by scripts/cutout-icon.py).
+ * Because the master is already transparent and trimmed to the subject, this
+ * step only resizes: there is no backdrop to round off and no margin to zoom
+ * past. Idempotent — re-run with `npm run icon:round` whenever the master
+ * changes.
  *
  * Outputs:
- *   resources/icon.png  — 1024², used at runtime (BrowserWindow icon → taskbar)
- *   build/icon.png      —  512², electron-builder source
+ *   resources/icon.png  — 512², used at runtime (BrowserWindow icon → taskbar)
+ *   build/icon.png      — 512², electron-builder source
  *   build/icon.ico      — multi-size Windows icon (the packaged .exe + taskbar)
  *
  * Note: build/icon.icns (macOS) is left untouched — regenerate it on a Mac if
- * the dock icon there also needs rounding.
+ * the dock icon there also needs updating.
  */
 import { readFile, writeFile } from 'node:fs/promises'
 import { Jimp } from 'jimp'
 import pngToIco from 'png-to-ico'
 
 const SOURCE = 'resources/icon-source.png'
-// Gentle zoom to trim the art's outer margin/frame; 1 = no zoom.
-const ZOOM = Number(process.env.ICON_ZOOM || 1.12)
 
-/** Crop a centered square that is `1/ZOOM` of the canvas, then scale back up. */
-function zoomToSubject(image, zoom) {
-  if (zoom <= 1) return image
-  const { width, height } = image.bitmap
-  const keep = Math.round(Math.min(width, height) / zoom)
-  const x = Math.round((width - keep) / 2)
-  const y = Math.round((height - keep) / 2)
-  return image.crop({ x, y, w: keep, h: keep }).resize({ w: width, h: height })
-}
-
-/**
- * Zero the alpha outside a ROUNDED RECTANGLE (the modern app-icon shape), with a
- * ~1px antialiased edge. We use a rounded square rather than a circle so the
- * full character + receipt stay in frame (a circle would clip the receipt and
- * his hands). Mutates the bitmap in place.
- */
-function maskRoundedRect(image, radiusFraction = 0.18) {
-  const { data, width, height } = image.bitmap
-  const r = Math.min(width, height) * radiusFraction
-
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      // How far the pixel sits INTO a corner zone (0 along the straight edges).
-      const dx = Math.max(r - x, x - (width - 1 - r), 0)
-      const dy = Math.max(r - y, y - (height - 1 - r), 0)
-      if (dx === 0 || dy === 0) continue // straight edge / interior — opaque
-      const edge = r - Math.hypot(dx, dy) // >1 inside the arc, <0 outside
-      if (edge >= 1) continue
-      const factor = Math.max(0, Math.min(1, edge)) // 0..1 across the rim
-      const alphaIdx = (y * width + x) * 4 + 3
-      data[alphaIdx] = Math.round(data[alphaIdx] * factor)
-    }
-  }
-}
-
-/** A round PNG buffer of the master at the given square size. */
+/** A PNG buffer of the master resized to a square of the given size. */
 async function pngAt(master, size) {
   return master.clone().resize({ w: size, h: size }).getBuffer('image/png')
 }
 
 const master = await Jimp.fromBuffer(await readFile(SOURCE))
-zoomToSubject(master, ZOOM)
-maskRoundedRect(master)
 
 // 1) Runtime icon (512², what the dev taskbar/window shows — plenty for any
 // icon size, and keeps the file small vs. the multi-MB source art).
@@ -81,4 +41,4 @@ const icoSizes = [256, 128, 64, 48, 32, 16]
 const icoBuffers = await Promise.all(icoSizes.map((size) => pngAt(master, size)))
 await writeFile('build/icon.ico', await pngToIco(icoBuffers))
 
-console.log(`✓ Rounded icon (zoom ${ZOOM}×): resources/icon.png, build/icon.png, build/icon.ico`)
+console.log('✓ Icon assets regenerated from transparent master: resources/icon.png, build/icon.png, build/icon.ico')
