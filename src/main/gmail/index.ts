@@ -14,6 +14,8 @@
  */
 import type { OAuth2Client } from 'google-auth-library'
 import { getAuthorizedClient } from '../auth'
+import { clearAuth } from '../auth/tokenStore'
+import { AuthExpiredError, isInvalidGrant } from '../auth/errors'
 import { backoffMs, isTransientStatus } from './retry'
 import {
   buildSearchQuery,
@@ -68,6 +70,13 @@ async function requestWithRetry<T>(client: OAuth2Client, url: string): Promise<T
       const { data } = await client.request<T>({ url })
       return data
     } catch (e) {
+      // An expired/revoked refresh token can't be retried or recovered. Clear it
+      // so the app reflects "disconnected", and surface a friendly reconnect
+      // prompt instead of Google's raw `invalid_grant`.
+      if (isInvalidGrant(e)) {
+        clearAuth()
+        throw new AuthExpiredError()
+      }
       const status = (e as { response?: { status?: number } })?.response?.status
       if (!isTransientStatus(status) || attempt >= MAX_RETRIES) throw e
       await new Promise((resolve) => setTimeout(resolve, backoffMs(attempt)))
