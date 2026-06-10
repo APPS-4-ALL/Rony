@@ -183,10 +183,25 @@ export function registerIpcHandlers(): void {
   // selected in settings (RONY-9 deterministic OR RONY-10 AI), then download the
   // matched emails' PDF/image attachments and record them in SQLite (RONY-11).
   // Triggered by the RONY-14 "Scan now" button.
+  // The in-flight scan's cancellation token. Only one scan runs at a time (the
+  // renderer guards re-entry), so a single controller suffices. `scan:cancel`
+  // aborts it; the pipeline checks the signal between items and stops
+  // cooperatively, resolving `scan:run` with partial counts + `cancelled: true`.
+  let activeScanController: AbortController | null = null
+  ipcMain.handle(IpcChannels.scanCancel, () => {
+    activeScanController?.abort()
+  })
+
   ipcMain.handle(IpcChannels.scanRun, async (event, rawOpts: unknown): Promise<ScanResult> => {
     const sendProgress = (progress: ScanProgress): void => {
       if (!event.sender.isDestroyed()) event.sender.send(IpcChannels.scanProgress, progress)
     }
+
+    // Fresh cancellation token for this run (abort any stray previous one first).
+    activeScanController?.abort()
+    const controller = new AbortController()
+    activeScanController = controller
+    const { signal } = controller
 
     // Use the user's persisted engine + provider choice (RONY-12/16).
     const { defaultEngine: engine, aiProvider, aiConsent } = getSettings()
@@ -213,6 +228,20 @@ export function registerIpcHandlers(): void {
       errors: fetchErrors,
       firstError: fetchFirstError
     } = await fetchEmails(sanitizeScanOptions(rawOpts))
+
+    // Cancelled while fetching → stop before the expensive classify/download.
+    if (signal.aborted) {
+      sendProgress({ phase: 'done', processed: 0, total: emails.length, matched: 0, downloaded: 0 })
+      return {
+        scanned: emails.length,
+        matched: 0,
+        downloaded: 0,
+        rejected: 0,
+        errors: fetchErrors,
+        errorSample: fetchFirstError,
+        cancelled: true
+      }
+    }
 
     // RONY-10 tiered scan: the AI engine first classifies each email on the FAST
     // model using text only, then escalates to the STRONG document-reading model
@@ -263,12 +292,37 @@ export function registerIpcHandlers(): void {
           )
       },
       (processed, total, matched) =>
-        sendProgress({ phase: 'classifying', processed, total, matched, downloaded: 0 })
+        sendProgress({ phase: 'classifying', processed, total, matched, downloaded: 0 }),
+      signal
     )
 
     const matched = approved.length
-    const download = await downloadAndRecord(approved, (processed, total) =>
-      sendProgress({ phase: 'downloading', processed, total, matched, downloaded: processed })
+
+    // Cancelled while classifying → stop before downloading anything.
+    if (signal.aborted) {
+      sendProgress({
+        phase: 'done',
+        processed: emails.length,
+        total: emails.length,
+        matched,
+        downloaded: 0
+      })
+      return {
+        scanned: emails.length,
+        matched,
+        downloaded: 0,
+        rejected: 0,
+        errors: fetchErrors + classifyErrors,
+        errorSample: fetchFirstError ?? classifyFirstError,
+        cancelled: true
+      }
+    }
+
+    const download = await downloadAndRecord(
+      approved,
+      (processed, total) =>
+        sendProgress({ phase: 'downloading', processed, total, matched, downloaded: processed }),
+      signal
     )
 
     sendProgress({
@@ -284,7 +338,8 @@ export function registerIpcHandlers(): void {
       downloaded: download.downloaded,
       rejected: download.rejected,
       errors: fetchErrors + classifyErrors + download.errors,
-      errorSample: fetchFirstError ?? classifyFirstError ?? download.firstError
+      errorSample: fetchFirstError ?? classifyFirstError ?? download.firstError,
+      cancelled: signal.aborted
     }
   })
 

@@ -290,7 +290,7 @@ export const INVOICE_CONTENT_KEYWORDS: readonly string[] = [
   'invoice',
   'tax invoice',
   'receipt',
-  'total',
+  'total', // counts only next to a money amount — see TOTAL_NEAR_MONEY
   'subtotal',
   'amount due',
   'vat',
@@ -353,6 +353,22 @@ function looksLikeBankTransfer(haystack: string): boolean {
 }
 
 /**
+ * A MONETARY amount: a currency symbol/code, a decimal price (117.00), or a
+ * thousands-grouped number (1,234). Deliberately NOT a bare integer — a count
+ * like "180" is not money.
+ */
+const MONEY_TOKEN = String.raw`(?:[$₪€£]|\d+\.\d{2}|\d{1,3}(?:,\d{3})+|\b(?:usd|eur|ils|nis|gbp|shekels?)\b)`
+
+/**
+ * "total" beside a money amount, in either order ("Total: $1,234.56" /
+ * "₪117 total"). The bare English word "total" is a weak signal on its own — it
+ * shows up in ordinary prose ("in total, 180 keywords ranked") — so we only
+ * count it as an invoice keyword when an actual monetary amount sits within a
+ * short window of it. A nearby BARE integer (the "180" above) is not enough.
+ */
+const TOTAL_NEAR_MONEY = new RegExp(`total.{0,16}${MONEY_TOKEN}|${MONEY_TOKEN}.{0,16}total`, 'i')
+
+/**
  * Decide whether extracted document text reads like an invoice/receipt.
  *
  * Conservative by design — this gate only ADDS rejections, never drops a file we
@@ -386,7 +402,14 @@ export function validateContent(
     }
   }
 
-  const matched = keywords.filter((k) => haystack.includes(normalizeForMatch(k)))
+  const matched = keywords.filter((k) => {
+    const needle = normalizeForMatch(k)
+    if (!haystack.includes(needle)) return false
+    // "total" is the one weak English keyword: it appears in plain prose, so it
+    // only counts when a real money amount sits next to it (see TOTAL_NEAR_MONEY).
+    if (needle === 'total') return TOTAL_NEAR_MONEY.test(haystack)
+    return true
+  })
   if (matched.length > 0) return { valid: true, skipped: false, matched }
   return {
     valid: false,

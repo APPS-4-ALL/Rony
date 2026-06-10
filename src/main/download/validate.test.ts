@@ -163,7 +163,7 @@ describe('validateContent — RONY-17 content-keyword gate', () => {
   })
 
   it('passes English invoice text', () => {
-    const v = validateContent('TAX INVOICE\nSubtotal: 100\nVAT: 17\nTotal Amount Due: 117')
+    const v = validateContent('TAX INVOICE\nSubtotal: 100\nVAT: 17\nTotal Amount Due: $117.00')
     expect(v.valid).toBe(true)
     expect(v.matched).toEqual(expect.arrayContaining(['invoice', 'total', 'vat']))
   })
@@ -208,7 +208,17 @@ describe('validateContent — RONY-17 content-keyword gate', () => {
   })
 
   it('does NOT pass on the weak "amount" word alone (needs a real invoice term)', () => {
-    expect(validateContent('Total amount paid for your order: 50').valid).toBe(true) // "total" is a real term
     expect(validateContent('The amount you requested is attached.').valid).toBe(false) // only "amount"
+  })
+
+  it('counts "total" only next to a money amount, not as bare prose', () => {
+    // Real invoice lines — "total" beside an actual monetary amount.
+    expect(validateContent('Order total: $1,234.56').valid).toBe(true)
+    expect(validateContent('Total 117 ₪').valid).toBe(true)
+    // The marketing case study that slipped through: a digit sits right next to
+    // "total", but it is a keyword COUNT, not money — must NOT pass.
+    expect(validateContent('Achieved #1 rankings. In total, 180 keywords ranked.').valid).toBe(
+      false
+    )
   })
 })

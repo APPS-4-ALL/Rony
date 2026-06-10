@@ -22,7 +22,11 @@ function stubApi(): void {
       list,
       openFile: vi.fn().mockResolvedValue('')
     },
-    scan: { run: scanRun, onProgress: vi.fn(() => () => {}) },
+    scan: {
+      run: scanRun,
+      cancel: vi.fn().mockResolvedValue(undefined),
+      onProgress: vi.fn(() => () => {})
+    },
     settings: {
       get: vi.fn().mockResolvedValue(DEFAULT_SETTINGS),
       set: vi.fn().mockResolvedValue(DEFAULT_SETTINGS)

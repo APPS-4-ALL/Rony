@@ -149,6 +149,8 @@ export interface ScanResult {
   errors: number
   /** A representative error message when `errors > 0` (e.g. "Gemini API error 400: API key not valid"). */
   errorSample?: string
+  /** True when the user cancelled mid-scan — the counts above are partial. */
+  cancelled?: boolean
 }
 
 /** Request payload for the native "save file" dialog (RONY-15 CSV export). */
@@ -220,6 +222,12 @@ export interface RoniApi {
      * for this run; omitted fields use the engine defaults.
      */
     run: (opts?: ScanOptions) => Promise<ScanResult>
+    /**
+     * Request cancellation of the in-flight scan. Cooperative: the scan stops
+     * pulling new work and resolves its `run()` promise with partial counts and
+     * `cancelled: true`. Safe to call when no scan is running (a no-op).
+     */
+    cancel: () => Promise<void>
     /**
      * Subscribe to live scan progress. Returns an unsubscribe function — call it
      * (e.g. on unmount) to stop listening.
