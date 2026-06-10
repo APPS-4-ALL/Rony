@@ -256,6 +256,22 @@ export function isInvoiceDocument(att: GmailAttachmentRef): boolean {
   return INVOICE_DOC_EXTENSIONS.includes(ext)
 }
 
+/**
+ * Outlook / Exchange auto-name EMBEDDED body & signature images `image001.png`,
+ * `image002.jpg`, … (3+ zero-padded digits). These are logos/signatures, never
+ * the invoice itself — but they sometimes arrive WITHOUT the inline disposition
+ * or Content-ID that would let us flag them via `att.inline` (e.g. when a mail
+ * marks them `Content-Disposition: attachment`). Recognising the naming pattern
+ * is a reliable second signal so a signature logo never gets saved as an invoice
+ * or sent to the vision model.
+ */
+const INLINE_IMAGE_NAME = /^image\d{3,}\.(?:png|jpe?g|gif|bmp|webp|tiff?|heic|heif)$/i
+
+/** True when an image's filename looks like a mail-client embedded body/signature image. */
+export function isInlineImageName(filename: string): boolean {
+  return INLINE_IMAGE_NAME.test(filename.trim())
+}
+
 /** Options that shape the Gmail search query RONY-7 runs. */
 export interface SearchQueryOptions {
   /** Lower date bound, inclusive (ISO YYYY-MM-DD). */

@@ -8,7 +8,12 @@
  */
 import { access, mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { isInvoiceDocument, type GmailAttachmentRef, type ParsedEmail } from '../gmail/parse'
+import {
+  isInlineImageName,
+  isInvoiceDocument,
+  type GmailAttachmentRef,
+  type ParsedEmail
+} from '../gmail/parse'
 import { cleanReceiptBody } from '../pdf/cleanBody'
 import { validateContent, type ValidationResult } from './validate'
 import type { EngineType, NewInvoice } from '../../shared/types'
@@ -137,6 +142,10 @@ export function sanitizeFilename(name: string): string {
  */
 function isInScope(att: GmailAttachmentRef): boolean {
   if (!isInvoiceDocument(att)) return false
+  // Outlook/Exchange auto-named embedded images (image001.png, …) are signature
+  // logos, not invoices — skip them even when they arrive without the inline flag
+  // (and regardless of MIME, in case a sender mislabels the part).
+  if (isInlineImageName(att.filename)) return false
   const isImage = att.mimeType.toLowerCase().startsWith('image/')
   // Inline images are signature/logo art embedded in the body via `cid:` — never
   // the invoice itself — so skip them regardless of size (logos can exceed the

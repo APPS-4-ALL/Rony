@@ -240,6 +240,35 @@ describe('downloadApproved — RONY-11 DoD', () => {
     expect(store.rows[0].localFilePath).toContain('real.pdf')
   })
 
+  it('skips an Outlook signature image (image001.png) even when not flagged inline', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    // The real-world case: a financial email carrying its real invoice PDF plus a
+    // big ZEEKR-style signature logo that arrived WITHOUT the inline flag.
+    const approved = [
+      approvedEmail([
+        att({ filename: 'invoice.pdf', mimeType: 'application/pdf', attachmentId: 'A1' }),
+        att({
+          filename: 'image001.png',
+          mimeType: 'image/png',
+          attachmentId: 'A2',
+          size: 60_000, // well past the size gate
+          inline: false // header flag missing — only the NAME betrays it
+        })
+      ])
+    ]
+
+    const summary = await downloadApproved(approved, {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      store
+    })
+
+    expect(summary).toMatchObject({ downloaded: 1, skipped: 1 })
+    expect(store.rows).toHaveLength(1)
+    expect(store.rows[0].localFilePath).toContain('invoice.pdf')
+  })
+
   it('uses AI-extracted metadata when provided', async () => {
     const targetDir = tempDir()
     const store = fakeStore()

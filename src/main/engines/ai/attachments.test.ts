@@ -109,6 +109,17 @@ describe('pickInvoiceAttachment', () => {
     expect(pickInvoiceAttachment([logo])).toBeNull()
   })
 
+  it('skips an Outlook signature image by name even when not flagged inline', () => {
+    const sig = att({
+      filename: 'image001.png',
+      mimeType: 'image/png',
+      attachmentId: 'SIG',
+      size: 60_000,
+      inline: false // header flag missing — caught by the name pattern
+    })
+    expect(pickInvoiceAttachment([sig])).toBeNull()
+  })
+
   it('prefers a real attachment image over an inline logo', () => {
     const logo = att({
       filename: 'logo.png',

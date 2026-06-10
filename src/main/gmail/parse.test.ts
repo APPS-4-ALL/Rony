@@ -6,6 +6,7 @@ import {
   parseMessage,
   toDeterministicInput,
   isPdfOrImage,
+  isInlineImageName,
   buildSearchQuery,
   type GmailMessage,
   type GmailAttachmentRef
@@ -261,5 +262,23 @@ describe('RONY-7 → RONY-9 handoff', () => {
     const result = classifyDeterministic(toDeterministicInput(parseMessage(msg)))
     expect(result.isInvoice).toBe(true)
     expect(result.matchedKeywords).toEqual(expect.arrayContaining(['חשבונית', 'קבלה']))
+  })
+})
+
+describe('isInlineImageName — Outlook embedded image/signature detection', () => {
+  it('matches the auto-generated image00N.* names', () => {
+    expect(isInlineImageName('image001.png')).toBe(true)
+    expect(isInlineImageName('image012.jpg')).toBe(true)
+    expect(isInlineImageName('IMAGE001.PNG')).toBe(true) // case-insensitive
+    expect(isInlineImageName('image1000.gif')).toBe(true) // 4+ digits
+    expect(isInlineImageName(' image002.jpeg ')).toBe(true) // trimmed
+  })
+
+  it('does NOT match real attachment names or 1–2 digit "image" names', () => {
+    expect(isInlineImageName('invoice.png')).toBe(false)
+    expect(isInlineImageName('receipt-2026.jpg')).toBe(false)
+    expect(isInlineImageName('image1.png')).toBe(false) // a screenshot, not the Outlook pattern
+    expect(isInlineImageName('scan-image001.png')).toBe(false) // pattern must be the whole name
+    expect(isInlineImageName('image001.pdf')).toBe(false) // PDFs are real documents
   })
 })
