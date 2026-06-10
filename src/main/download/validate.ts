@@ -285,7 +285,6 @@ export const INVOICE_CONTENT_KEYWORDS: readonly string[] = [
   'סה"כ', // total
   'מע"מ', // VAT
   'לתשלום', // for payment / amount due
-  'סכום', // amount/sum
   'אסמכתא', // reference no. (common on receipts)
   // English
   'invoice',
@@ -293,10 +292,26 @@ export const INVOICE_CONTENT_KEYWORDS: readonly string[] = [
   'receipt',
   'total',
   'subtotal',
-  'amount',
   'amount due',
   'vat',
   'balance due'
+  // NOTE: deliberately NOT bare "amount"/"סכום" — every financial document has
+  // them, so on their own they're too weak a signal (they let bank-transfer
+  // notes and the like through).
+]
+
+/**
+ * Markers that mean a file is NOT an invoice/receipt even though it mentions
+ * invoice words — a billing FAQ, a policy/terms document, etc. We reject on these
+ * so a single passing "invoice" mention (e.g. inside a Billing FAQ) can't fool the
+ * keyword gate. Kept high-precision so a real invoice is never caught.
+ */
+const NON_INVOICE_MARKERS: readonly string[] = [
+  'frequently asked questions',
+  'שאלות נפוצות',
+  'שאלות ותשובות',
+  'privacy policy',
+  'מדיניות פרטיות'
 ]
 
 /** Verdict for the content-keyword gate. */
@@ -328,13 +343,27 @@ function normalizeForMatch(s: string): string {
 }
 
 /**
+ * Bank / SWIFT transfer confirmations ("debtor"/"creditor"/IBAN, "payment
+ * executed") are payment RECORDS, not the vendor's invoice — yet they carry
+ * invoice words and an amount. The debtor+creditor pairing is specific to them
+ * and never appears on a real invoice, so we use it to reject them.
+ */
+function looksLikeBankTransfer(haystack: string): boolean {
+  return haystack.includes('debtor') && haystack.includes('creditor')
+}
+
+/**
  * Decide whether extracted document text reads like an invoice/receipt.
  *
- * Conservative by design — this gate can only ADD rejections for CLEAR
- * mismatches, never drop a file we couldn't read:
- *   - no/blank text (couldn't extract) → `{ valid: true, skipped: true }`
- *   - text with ≥1 keyword             → `{ valid: true, matched }`
- *   - text with 0 keywords             → `{ valid: false, reason: 'content_mismatch' }`
+ * Conservative by design — this gate only ADDS rejections, never drops a file we
+ * couldn't read:
+ *   - no/blank text (couldn't extract)         → `{ valid: true, skipped: true }`
+ *   - a non-invoice document marker / transfer → `{ valid: false, content_mismatch }`
+ *   - text with ≥1 invoice keyword             → `{ valid: true, matched }`
+ *   - text with 0 invoice keywords             → `{ valid: false, content_mismatch }`
+ *
+ * The non-invoice markers run FIRST so a passing "invoice" mention inside, say, a
+ * billing FAQ can't sneak through the keyword check.
  */
 export function validateContent(
   text: string | null | undefined,
@@ -345,8 +374,19 @@ export function validateContent(
   }
 
   const haystack = normalizeForMatch(text)
-  const matched = keywords.filter((k) => haystack.includes(normalizeForMatch(k)))
 
+  // Reject documents that are clearly a DIFFERENT type, even though they mention
+  // invoice words (a billing FAQ, a policy, a bank-transfer confirmation).
+  const negative = NON_INVOICE_MARKERS.find((m) => haystack.includes(normalizeForMatch(m)))
+  if (negative || looksLikeBankTransfer(haystack)) {
+    return {
+      valid: false,
+      skipped: false,
+      reason: `content_mismatch (non-invoice document: ${negative ?? 'bank transfer'})`
+    }
+  }
+
+  const matched = keywords.filter((k) => haystack.includes(normalizeForMatch(k)))
   if (matched.length > 0) return { valid: true, skipped: false, matched }
   return {
     valid: false,
