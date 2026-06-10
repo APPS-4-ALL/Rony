@@ -240,11 +240,13 @@ interface DownloadTask {
 async function runWithConcurrency<T>(
   items: T[],
   limit: number,
-  fn: (item: T) => Promise<void>
+  fn: (item: T) => Promise<void>,
+  signal?: AbortSignal
 ): Promise<void> {
   let next = 0
   const worker = async (): Promise<void> => {
-    while (next < items.length) {
+    // Stop dispatching new items once cancelled; the item in flight finishes.
+    while (next < items.length && !signal?.aborted) {
       const i = next++
       await fn(items[i])
     }
@@ -266,7 +268,8 @@ async function runWithConcurrency<T>(
 export async function downloadApproved(
   approved: ApprovedEmail[],
   deps: DownloadDeps,
-  onProgress?: (processed: number, total: number) => void
+  onProgress?: (processed: number, total: number) => void,
+  signal?: AbortSignal
 ): Promise<DownloadSummary> {
   const summary: DownloadSummary = { downloaded: 0, skipped: 0, rejected: 0, errors: 0 }
   await mkdir(deps.targetDir, { recursive: true })
@@ -337,80 +340,85 @@ export async function downloadApproved(
   }
 
   let processed = 0
-  await runWithConcurrency(tasks, DOWNLOAD_CONCURRENCY, async (task) => {
-    try {
-      const recorded = deps.store.existsByPath(task.targetPath)
-      // Already recorded AND the file is still on disk → nothing to do.
-      if (recorded && (await fileExists(task.targetPath))) {
-        summary.skipped++
-        return
-      }
+  await runWithConcurrency(
+    tasks,
+    DOWNLOAD_CONCURRENCY,
+    async (task) => {
+      try {
+        const recorded = deps.store.existsByPath(task.targetPath)
+        // Already recorded AND the file is still on disk → nothing to do.
+        if (recorded && (await fileExists(task.targetPath))) {
+          summary.skipped++
+          return
+        }
 
-      const bytes = await deps.fetchAttachment(task.messageId, task.attachmentId)
+        const bytes = await deps.fetchAttachment(task.messageId, task.attachmentId)
 
-      // RONY-17: validate NEW downloads before persisting — drop HTML error
-      // pages, truncated/empty files, mistyped binaries, and non-invoice content
-      // so they never get recorded. A restore (`recorded`) was already validated
-      // when first saved, so we don't re-judge it (and never strand a DB row).
-      // We keep the extracted text: the deterministic engine reuses it below to
-      // pull vendor + total, so we extract once and feed two consumers.
-      let documentText: string | null = null
-      if (!recorded) {
-        const verdict = await passesValidation(task.filename, task.mimeType, bytes)
-        if (!verdict.ok) return
-        documentText = verdict.text
-      }
+        // RONY-17: validate NEW downloads before persisting — drop HTML error
+        // pages, truncated/empty files, mistyped binaries, and non-invoice content
+        // so they never get recorded. A restore (`recorded`) was already validated
+        // when first saved, so we don't re-judge it (and never strand a DB row).
+        // We keep the extracted text: the deterministic engine reuses it below to
+        // pull vendor + total, so we extract once and feed two consumers.
+        let documentText: string | null = null
+        if (!recorded) {
+          const verdict = await passesValidation(task.filename, task.mimeType, bytes)
+          if (!verdict.ok) return
+          documentText = verdict.text
+        }
 
-      await writeFile(task.targetPath, bytes)
+        await writeFile(task.targetPath, bytes)
 
-      if (recorded) {
-        // Row exists but the file was missing — we just restored it; no new row.
-        summary.downloaded++
-        return
-      }
+        if (recorded) {
+          // Row exists but the file was missing — we just restored it; no new row.
+          summary.downloaded++
+          return
+        }
 
-      // Deterministic field extraction: the keyword engine records no
-      // vendor/amount on its own, so we pull the supplier name + grand total off
-      // the document text with regex (see extractInvoiceFields). The AI engine
-      // already supplies these on `task.invoice`, so we only fill the
-      // deterministic gap. We prefer the native text layer; when it is blank (a
-      // scan / photo / image-only PDF) we fall back to OCR. If both come up
-      // empty the fields stay null — visibly flagged for review.
-      let invoice = task.invoice
-      if (invoice.engineType === 'deterministic') {
-        let text = documentText
-        if ((!text || !text.trim()) && deps.ocrDocument) {
-          try {
-            text = await deps.ocrDocument({
-              filename: task.filename,
-              mimeType: task.mimeType,
-              bytes
-            })
-          } catch (e) {
-            console.warn(`[ocr] extraction failed for ${task.filename} (${task.messageId}):`, e)
+        // Deterministic field extraction: the keyword engine records no
+        // vendor/amount on its own, so we pull the supplier name + grand total off
+        // the document text with regex (see extractInvoiceFields). The AI engine
+        // already supplies these on `task.invoice`, so we only fill the
+        // deterministic gap. We prefer the native text layer; when it is blank (a
+        // scan / photo / image-only PDF) we fall back to OCR. If both come up
+        // empty the fields stay null — visibly flagged for review.
+        let invoice = task.invoice
+        if (invoice.engineType === 'deterministic') {
+          let text = documentText
+          if ((!text || !text.trim()) && deps.ocrDocument) {
+            try {
+              text = await deps.ocrDocument({
+                filename: task.filename,
+                mimeType: task.mimeType,
+                bytes
+              })
+            } catch (e) {
+              console.warn(`[ocr] extraction failed for ${task.filename} (${task.messageId}):`, e)
+            }
+          }
+          if (text && text.trim()) {
+            const fields = extractInvoiceFields(text)
+            invoice = {
+              ...invoice,
+              vendor: fields.vendor,
+              amount: fields.amount,
+              currency: fields.currency
+            }
           }
         }
-        if (text && text.trim()) {
-          const fields = extractInvoiceFields(text)
-          invoice = {
-            ...invoice,
-            vendor: fields.vendor,
-            amount: fields.amount,
-            currency: fields.currency
-          }
-        }
+        // New file: record it. A false return means a concurrent scan won the race.
+        if (deps.store.insert(invoice)) summary.downloaded++
+        else summary.skipped++
+      } catch (e) {
+        summary.errors++
+        summary.firstError ??= e instanceof Error ? e.message : String(e)
+        console.error(`[download] failed for ${task.messageId} / ${task.filename}:`, e)
+      } finally {
+        onProgress?.(++processed, tasks.length)
       }
-      // New file: record it. A false return means a concurrent scan won the race.
-      if (deps.store.insert(invoice)) summary.downloaded++
-      else summary.skipped++
-    } catch (e) {
-      summary.errors++
-      summary.firstError ??= e instanceof Error ? e.message : String(e)
-      console.error(`[download] failed for ${task.messageId} / ${task.filename}:`, e)
-    } finally {
-      onProgress?.(++processed, tasks.length)
-    }
-  })
+    },
+    signal
+  )
 
   // RONY-18 — invoices behind a DOWNLOAD LINK (not attached). For approved
   // emails with no in-scope attachment, follow the best invoice link and fetch
@@ -498,7 +506,8 @@ export async function downloadApproved(
         } else {
           summary.skipped++
         }
-      }
+      },
+      signal
     )
   }
 
@@ -550,7 +559,8 @@ export async function downloadApproved(
 
       if (deps.store.insert(invoice)) summary.downloaded++
       else summary.skipped++
-    }
+    },
+    signal
   )
 
   return summary

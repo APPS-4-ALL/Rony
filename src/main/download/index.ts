@@ -45,7 +45,8 @@ export function getEffectiveInvoicesDir(): string {
  */
 export async function downloadAndRecord(
   approved: ApprovedEmail[],
-  onProgress?: (processed: number, total: number) => void
+  onProgress?: (processed: number, total: number) => void,
+  signal?: AbortSignal
 ): Promise<DownloadSummary> {
   const client = getAuthorizedClient()
   if (!client) throw new NotConnectedError()
@@ -73,7 +74,8 @@ export async function downloadAndRecord(
         insert: tryInsertInvoice
       }
     },
-    onProgress
+    onProgress,
+    signal
   )
 }
 

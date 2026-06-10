@@ -104,4 +104,25 @@ describe('selectApproved — AI engine', () => {
     expect(seen).toHaveLength(10)
     expect(out.approved).toHaveLength(10)
   })
+
+  it('stops pulling new emails once the abort signal fires (cancellation)', async () => {
+    const controller = new AbortController()
+    let seen = 0
+    const classifiers: Classifiers = {
+      deterministic: () => false,
+      ai: async () => {
+        // Abort after the first batch starts; remaining emails must not be pulled.
+        if (++seen === 1) controller.abort()
+        return aiResult({ isFinancial: false })
+      }
+    }
+    const emails = Array.from({ length: 20 }, (_, i) => email({ id: `e${i}` }))
+
+    const out = await selectApproved(emails, 'ai', classifiers, undefined, controller.signal)
+
+    // The in-flight batch (up to AI_CONCURRENCY) may finish, but we must stop far
+    // short of all 20 rather than draining the whole queue.
+    expect(seen).toBeLessThan(emails.length)
+    expect(out.approved).toHaveLength(0)
+  })
 })

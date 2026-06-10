@@ -27,6 +27,7 @@ const api: RoniApi = {
   },
   scan: {
     run: (opts) => ipcRenderer.invoke(IpcChannels.scanRun, opts),
+    cancel: () => ipcRenderer.invoke(IpcChannels.scanCancel),
     onProgress: (callback) => {
       const listener = (_e: IpcRendererEvent, progress: ScanProgress): void => callback(progress)
       ipcRenderer.on(IpcChannels.scanProgress, listener)
