@@ -7,7 +7,7 @@
  * file can never blow past the provider's inline-payload limit. Pure + free of
  * Electron/network imports, so it is fully unit-testable.
  */
-import type { GmailAttachmentRef } from '../../gmail/parse'
+import { isInlineImageName, type GmailAttachmentRef } from '../../gmail/parse'
 
 /**
  * Hard cap on a file we will inline into a model request. Gemini's
@@ -74,7 +74,8 @@ export function pickInvoiceAttachment(
       isVisionSupported(a) &&
       // Skip inline signature/logo images — they'd otherwise win the "largest
       // image" fallback below and get sent to the model instead of the invoice.
-      !(a.inline && visionMimeType(a) !== 'application/pdf') &&
+      // Caught by the inline flag OR the Outlook image00N.png naming pattern.
+      !((a.inline || isInlineImageName(a.filename)) && visionMimeType(a) !== 'application/pdf') &&
       (a.size === 0 || a.size <= MAX_VISION_BYTES)
   )
   if (usable.length === 0) return null
