@@ -65,7 +65,7 @@ describe('App.vue — RONY-14 Scan now', () => {
         createdAt: '2026-05-01T00:00:00Z'
       }
     ])
-    resolveScan({ scanned: 12, matched: 1, downloaded: 1, errors: 0 })
+    resolveScan({ scanned: 12, matched: 1, downloaded: 1, rejected: 0, errors: 0 })
     await flushPromises()
 
     // Table was refreshed from SQLite (list called again) and summary shown.
@@ -89,5 +89,29 @@ describe('App.vue — RONY-14 Scan now', () => {
     // Button recovered to idle and is clickable again.
     const btn = buttonByText(wrapper, 'סרוק עכשיו')
     expect((btn.element as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('shows the RONY-17 filtered-files count when documents were rejected', async () => {
+    scanRun.mockResolvedValue({ scanned: 20, matched: 5, downloaded: 3, rejected: 2, errors: 0 })
+
+    const wrapper = mount(App)
+    await flushPromises()
+
+    await buttonByText(wrapper, 'סרוק עכשיו').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('2 קבצים סוננו')
+  })
+
+  it('hides the filtered count when nothing was rejected', async () => {
+    scanRun.mockResolvedValue({ scanned: 20, matched: 5, downloaded: 5, rejected: 0, errors: 0 })
+
+    const wrapper = mount(App)
+    await flushPromises()
+
+    await buttonByText(wrapper, 'סרוק עכשיו').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('סוננו')
   })
 })

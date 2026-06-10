@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { downloadApproved, sanitizeFilename, type ApprovedEmail, type InvoiceStore } from './core'
+import { validateDocument } from './validate'
 import type { NewInvoice } from '../../shared/types'
 import type { GmailAttachmentRef, ParsedEmail } from '../gmail/parse'
 
@@ -84,7 +85,7 @@ describe('downloadApproved — RONY-11 DoD', () => {
       store
     })
 
-    expect(summary).toEqual({ downloaded: 2, skipped: 0, errors: 0 })
+    expect(summary).toEqual({ downloaded: 2, skipped: 0, rejected: 0, errors: 0 })
 
     // Files exist on disk (file name carries the attachment index — see #1)...
     const pdfPath = join(targetDir, 'msg1__0__invoice.pdf')
@@ -448,6 +449,131 @@ describe('downloadApproved — RONY-11 DoD', () => {
     const summary = await downloadApproved(approved, { targetDir, fetchAttachment: flaky, store })
 
     expect(summary).toMatchObject({ downloaded: 1, errors: 1 })
+    expect(store.rows).toHaveLength(1)
+  })
+})
+
+describe('downloadApproved — RONY-17 document validation', () => {
+  const PDF_BYTES = Buffer.concat([Buffer.from('%PDF-1.7\n'), Buffer.alloc(64)])
+  const HTML_BYTES = Buffer.from('<!DOCTYPE html><html><body>session expired</body></html>')
+
+  /** Fetch real bytes per attachment id: a valid PDF, an HTML page, or an empty file. */
+  const fetchByKind = (_m: string, a: string): Promise<Buffer> => {
+    if (a === 'PDF') return Promise.resolve(PDF_BYTES)
+    if (a === 'HTML') return Promise.resolve(HTML_BYTES)
+    return Promise.resolve(Buffer.alloc(0)) // 'EMPTY'
+  }
+
+  it('records the valid PDF and rejects the HTML page + the empty file', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    const approved = [
+      approvedEmail([
+        att({ filename: 'real.pdf', attachmentId: 'PDF' }),
+        att({ filename: 'portal.pdf', attachmentId: 'HTML' }),
+        att({ filename: 'cut.pdf', attachmentId: 'EMPTY' })
+      ])
+    ]
+
+    const summary = await downloadApproved(approved, {
+      targetDir,
+      fetchAttachment: fetchByKind,
+      validateDocument,
+      store
+    })
+
+    expect(summary).toMatchObject({ downloaded: 1, rejected: 2, errors: 0 })
+    // Only the genuine PDF made it to disk + the DB.
+    expect(store.rows).toHaveLength(1)
+    expect(existsSync(join(targetDir, 'msg1__0__real.pdf'))).toBe(true)
+    expect(existsSync(join(targetDir, 'msg1__1__portal.pdf'))).toBe(false)
+    expect(existsSync(join(targetDir, 'msg1__2__cut.pdf'))).toBe(false)
+  })
+
+  it('skips validation when no validator is injected (historical behaviour)', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    const approved = [approvedEmail([att({ filename: 'real.pdf', attachmentId: 'HTML' })])]
+
+    // No `validateDocument` in deps → the HTML bytes are accepted as before.
+    const summary = await downloadApproved(approved, {
+      targetDir,
+      fetchAttachment: fetchByKind,
+      store
+    })
+
+    expect(summary).toMatchObject({ downloaded: 1, rejected: 0 })
+    expect(store.rows).toHaveLength(1)
+  })
+})
+
+describe('downloadApproved — RONY-17 content validation', () => {
+  it('records a PDF whose extracted text reads like an invoice', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    const approved = [approvedEmail([att({ filename: 'inv.pdf', attachmentId: 'A1' })])]
+
+    const summary = await downloadApproved(approved, {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      extractDocumentText: async () => 'חשבונית מס 555\nסה"כ לתשלום 100 ₪',
+      store
+    })
+
+    expect(summary).toMatchObject({ downloaded: 1, rejected: 0 })
+    expect(store.rows).toHaveLength(1)
+  })
+
+  it('rejects a valid PDF whose text has no invoice keywords (content_mismatch)', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    const approved = [approvedEmail([att({ filename: 'pass.pdf', attachmentId: 'A1' })])]
+
+    const summary = await downloadApproved(approved, {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      extractDocumentText: async () => 'Boarding pass — gate 5, seat 9A, flight LY1',
+      store
+    })
+
+    expect(summary).toMatchObject({ downloaded: 0, rejected: 1 })
+    expect(store.rows).toHaveLength(0)
+    expect(existsSync(join(targetDir, 'msg1__0__pass.pdf'))).toBe(false)
+  })
+
+  it('keeps an image — content check is skipped (no extractable text)', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    const approved = [
+      approvedEmail([att({ filename: 'receipt.jpg', mimeType: 'image/jpeg', attachmentId: 'A1' })])
+    ]
+
+    const summary = await downloadApproved(approved, {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      extractDocumentText: async () => null, // images yield no extractable text
+      store
+    })
+
+    expect(summary).toMatchObject({ downloaded: 1, rejected: 0 })
+    expect(store.rows).toHaveLength(1)
+  })
+
+  it('does not reject when text extraction throws (encrypted/unreadable PDF)', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    const approved = [approvedEmail([att({ filename: 'locked.pdf', attachmentId: 'A1' })])]
+
+    const summary = await downloadApproved(approved, {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      extractDocumentText: async () => {
+        throw new Error('encrypted PDF')
+      },
+      store
+    })
+
+    expect(summary).toMatchObject({ downloaded: 1, rejected: 0 })
     expect(store.rows).toHaveLength(1)
   })
 })

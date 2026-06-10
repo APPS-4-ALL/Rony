@@ -13,6 +13,8 @@ import { invoiceExistsByMessageId, invoiceExistsByPath, tryInsertInvoice } from 
 import { getSettings } from '../settings'
 import { renderEmailPdf } from '../pdf'
 import { downloadApproved, type ApprovedEmail, type DownloadSummary } from './core'
+import { validateDocument } from './validate'
+import { extractDocumentText } from './extractText'
 
 /**
  * Default folder invoices are saved to: `Documents/Rony Invoices`.
@@ -50,6 +52,8 @@ export async function downloadAndRecord(
       fetchAttachment: (messageId, attachmentId) =>
         fetchAttachmentData(client, messageId, attachmentId),
       renderEmailPdf,
+      validateDocument,
+      extractDocumentText,
       store: {
         existsByPath: invoiceExistsByPath,
         existsByMessageId: invoiceExistsByMessageId,

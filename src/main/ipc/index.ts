@@ -239,6 +239,7 @@ export function registerIpcHandlers(): void {
       scanned: emails.length,
       matched,
       downloaded: download.downloaded,
+      rejected: download.rejected,
       errors: fetchErrors + classifyErrors + download.errors,
       errorSample: fetchFirstError ?? classifyFirstError ?? download.firstError
     }

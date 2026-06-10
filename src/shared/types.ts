@@ -127,6 +127,12 @@ export interface ScanResult {
   matched: number
   /** Attachments successfully downloaded + recorded in the DB. */
   downloaded: number
+  /**
+   * Downloaded files filtered out by document validation (RONY-17) — an HTML
+   * error page, a truncated/empty download, or a file whose bytes don't match
+   * its type. NOT errors: these were deliberately rejected as not-real documents.
+   */
+  rejected: number
   /** Failures encountered (non-fatal). */
   errors: number
   /** A representative error message when `errors > 0` (e.g. "Gemini API error 400: API key not valid"). */
