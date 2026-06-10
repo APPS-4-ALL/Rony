@@ -55,6 +55,28 @@ describe('scoreInvoiceLink / selectInvoiceLinks', () => {
     expect(scoreInvoiceLink(link('https://facebook.com/vendor', 'Invoice'))).toBe(0)
   })
 
+  it('hard-excludes marketing collateral (case study / whitepaper) even as a .pdf', () => {
+    // The real regression: a vendor's "case study" PDF was followed and recorded.
+    expect(scoreInvoiceLink(link('https://x.co/resources/IOD-Wiz-Case-Study.pdf'))).toBe(0)
+    expect(scoreInvoiceLink(link('https://x.co/dl.pdf', 'Read our case study'))).toBe(0)
+    expect(scoreInvoiceLink(link('https://x.co/whitepaper.pdf'))).toBe(0)
+  })
+
+  it('a keyword-less .pdf stays a weak candidate and never outranks a real invoice link', () => {
+    const barePdf = link('https://x.co/files/9f3a.pdf') // .pdf only, no invoice keyword
+    const invoiceLink = link('https://x.co/portal/view', 'צפייה בחשבונית') // names an invoice
+    expect(scoreInvoiceLink(barePdf)).toBeGreaterThan(0) // still a last-resort candidate
+    expect(scoreInvoiceLink(barePdf)).toBeLessThan(scoreInvoiceLink(invoiceLink))
+    // And when both are present, the real invoice link is tried first.
+    expect(selectInvoiceLinks([barePdf, invoiceLink])[0].url).toBe(invoiceLink.url)
+  })
+
+  it('still rewards a .pdf that DOES carry an invoice keyword (full boost)', () => {
+    const keywordPdf = link('https://x.co/invoice-8821.pdf', 'Download invoice')
+    const keywordNoPdf = link('https://x.co/invoice/8821', 'Download invoice')
+    expect(scoreInvoiceLink(keywordPdf)).toBeGreaterThan(scoreInvoiceLink(keywordNoPdf))
+  })
+
   it('ranks candidates best-first and drops non-candidates', () => {
     const links = [
       link('https://x.co/unsubscribe', 'unsubscribe'),
