@@ -10,6 +10,7 @@ import { access, mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isInvoiceDocument, type GmailAttachmentRef, type ParsedEmail } from '../gmail/parse'
 import { cleanReceiptBody } from '../pdf/cleanBody'
+import type { ValidationResult } from './validate'
 import type { EngineType, NewInvoice } from '../../shared/types'
 
 /** Extracted invoice fields. The AI engine fills these; the deterministic engine leaves them null. */
@@ -56,6 +57,18 @@ export interface DownloadDeps {
     date: string | null
     body: string
   }) => Promise<Buffer>
+  /**
+   * RONY-17: validate a freshly downloaded document's bytes before we record it,
+   * filtering out error pages / truncated / mistyped files. Optional + injected
+   * so the pure core stays decoupled and testable; when absent, every fetched
+   * file is accepted (the historical behaviour). The real impl is
+   * {@link validateDocument} in ./validate.ts, wired in ./index.ts.
+   */
+  validateDocument?: (doc: {
+    filename: string
+    mimeType: string
+    bytes: Buffer
+  }) => ValidationResult
   store: InvoiceStore
 }
 
@@ -64,6 +77,12 @@ export interface DownloadSummary {
   downloaded: number
   /** Skipped: already present (file on disk + row), or out of scope, or lost a race. */
   skipped: number
+  /**
+   * RONY-17: fetched files that FAILED document validation (an HTML error page,
+   * a truncated/empty download, or a mistyped binary) and so were NOT recorded.
+   * Distinct from `errors` — these aren't failures, they're deliberately filtered.
+   */
+  rejected: number
   /** Per-attachment failures (non-fatal — the run continues). */
   errors: number
   /** A representative error message (the first failure), for the UI. */
@@ -158,6 +177,8 @@ interface DownloadTask {
   messageId: string
   attachmentId: string
   filename: string
+  /** The attachment's MIME type — a hint for RONY-17 document validation. */
+  mimeType: string
   targetPath: string
   invoice: NewInvoice
 }
@@ -194,7 +215,7 @@ export async function downloadApproved(
   deps: DownloadDeps,
   onProgress?: (processed: number, total: number) => void
 ): Promise<DownloadSummary> {
-  const summary: DownloadSummary = { downloaded: 0, skipped: 0, errors: 0 }
+  const summary: DownloadSummary = { downloaded: 0, skipped: 0, rejected: 0, errors: 0 }
   await mkdir(deps.targetDir, { recursive: true })
 
   // Resolve the work list up front; the index makes each file name unique.
@@ -213,6 +234,7 @@ export async function downloadApproved(
         messageId: email.id,
         attachmentId: att.attachmentId,
         filename: att.filename,
+        mimeType: att.mimeType,
         targetPath,
         invoice: buildInvoice(email, engineType, extracted, targetPath)
       })
@@ -230,6 +252,26 @@ export async function downloadApproved(
       }
 
       const bytes = await deps.fetchAttachment(task.messageId, task.attachmentId)
+
+      // RONY-17: validate NEW downloads before persisting — drop HTML error
+      // pages, truncated/empty files, and mistyped binaries so they never get
+      // recorded as invoices. A restore (`recorded`) was already validated when
+      // first saved, so we don't re-judge it (and never strand a DB row).
+      if (!recorded && deps.validateDocument) {
+        const verdict = deps.validateDocument({
+          filename: task.filename,
+          mimeType: task.mimeType,
+          bytes
+        })
+        if (!verdict.valid) {
+          summary.rejected++
+          console.warn(
+            `[validate] rejected ${task.filename} (${task.messageId}): ${verdict.reason}`
+          )
+          return
+        }
+      }
+
       await writeFile(task.targetPath, bytes)
 
       if (recorded) {

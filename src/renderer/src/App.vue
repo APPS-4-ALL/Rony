@@ -296,6 +296,9 @@ onUnmounted(() => {
             <span class="font-semibold text-slate-100">{{ scanSummary.scanned }}</span> · התאמות
             <span class="font-semibold text-slate-100">{{ scanSummary.matched }}</span> · הורדו
             <span class="font-semibold text-emerald-300">{{ scanSummary.downloaded }}</span>
+            <span v-if="scanSummary.rejected > 0" class="text-slate-400">
+              · {{ scanSummary.rejected }} קבצים סוננו (לא תקינים)
+            </span>
             <span v-if="scanSummary.errors > 0" class="text-amber-300">
               · {{ scanSummary.errors }} שגיאות
             </span>
