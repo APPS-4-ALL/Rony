@@ -41,4 +41,6 @@ const icoSizes = [256, 128, 64, 48, 32, 16]
 const icoBuffers = await Promise.all(icoSizes.map((size) => pngAt(master, size)))
 await writeFile('build/icon.ico', await pngToIco(icoBuffers))
 
-console.log('✓ Icon assets regenerated from transparent master: resources/icon.png, build/icon.png, build/icon.ico')
+console.log(
+  '✓ Icon assets regenerated from transparent master: resources/icon.png, build/icon.png, build/icon.ico'
+)
