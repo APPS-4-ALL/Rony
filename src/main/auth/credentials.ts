@@ -13,15 +13,22 @@ import { config as loadDotenv } from 'dotenv'
 loadDotenv()
 
 /**
+ * The Gmail read-only scope — read messages + download attachments (RONY-7/11).
+ * Read-only is intentional: Rony never modifies the user's mailbox. Exported so
+ * the login flow can verify the user actually GRANTED it (Google lets users
+ * decline individual scopes on the granular-consent screen).
+ */
+export const GMAIL_READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly'
+
+/**
  * OAuth scopes we request:
  *  - openid + userinfo.email → so we can show which account is connected.
  *  - gmail.readonly          → read messages + download attachments (RONY-7/11).
- * Read-only is intentional: Rony never modifies the user's mailbox.
  */
 export const OAUTH_SCOPES = [
   'openid',
   'https://www.googleapis.com/auth/userinfo.email',
-  'https://www.googleapis.com/auth/gmail.readonly'
+  GMAIL_READONLY_SCOPE
 ]
 
 export interface OAuthCredentials {

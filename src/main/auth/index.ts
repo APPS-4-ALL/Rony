@@ -17,7 +17,8 @@ import { type AddressInfo } from 'node:net'
 import { shell } from 'electron'
 import { CodeChallengeMethod, OAuth2Client } from 'google-auth-library'
 import type { AuthStatus } from '../../shared/types'
-import { getOAuthCredentials, OAUTH_SCOPES } from './credentials'
+import { getOAuthCredentials, GMAIL_READONLY_SCOPE, OAUTH_SCOPES } from './credentials'
+import { MissingGmailScopeError } from './errors'
 import { clearAuth, loadAuth, saveAuth } from './tokenStore'
 
 /** How long we wait for the user to finish consenting before giving up. */
@@ -149,6 +150,16 @@ export function login(): Promise<AuthStatus> {
       client
         .getToken({ code: code as string, codeVerifier })
         .then(({ tokens }) => {
+          // Google's granular-consent screen lets the user approve some scopes
+          // and decline others. Without gmail.readonly the token is useless —
+          // every scan would 403 — so refuse it now with a clear message instead
+          // of saving it and failing confusingly later.
+          const granted = (tokens.scope ?? '').split(/\s+/)
+          if (!granted.includes(GMAIL_READONLY_SCOPE)) {
+            respond('Gmail access was not granted.')
+            finish(new MissingGmailScopeError())
+            return
+          }
           const email = emailFromIdToken(tokens.id_token)
           saveAuth({ tokens, email })
           respond('Connected to Gmail ✓')
