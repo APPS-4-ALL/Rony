@@ -34,9 +34,12 @@ describe('settings validation', () => {
   it('recognises + coerces the AI provider (RONY-16)', () => {
     expect(isAiProvider('openai')).toBe(true)
     expect(isAiProvider('gemini')).toBe(true)
-    expect(isAiProvider('claude')).toBe(false)
+    expect(isAiProvider('claude')).toBe(true) // RONY: Claude added
+    expect(isAiProvider('groq')).toBe(true) // RONY: Groq added
+    expect(isAiProvider('mistral')).toBe(false)
     expect(isAiProvider(undefined)).toBe(false)
     expect(coerceAiProvider('gemini')).toBe('gemini')
+    expect(coerceAiProvider('claude')).toBe('claude')
     expect(coerceAiProvider('garbage')).toBe(DEFAULT_SETTINGS.aiProvider)
     expect(coerceAiProvider(undefined)).toBe('openai')
   })

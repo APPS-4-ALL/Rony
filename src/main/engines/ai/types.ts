@@ -6,7 +6,7 @@
  */
 
 /** The supported external LLM providers. */
-export type AiProviderName = 'openai' | 'gemini'
+export type AiProviderName = 'openai' | 'gemini' | 'claude' | 'groq'
 
 /**
  * One attachment's bytes, handed to a vision-capable model so it can read
