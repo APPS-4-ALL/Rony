@@ -29,10 +29,17 @@ prices or payment terms:
   - purchase orders & order confirmations (הזמנת רכש, אישור הזמנה) that are not a bill
   - delivery/shipping notes & tracking (תעודת משלוח, אישור משלוח)
   - account statements, salary slips (תלוש שכר), marketing, newsletters
+  - an email REQUESTING or INSTRUCTING that an invoice be issued/created — e.g.
+    "please issue an invoice", "בבקשה להוציא/להפיק חשבונית על סך…". This is a
+    person TALKING ABOUT an invoice (often naming an amount), NOT the invoice
+    itself. A real invoice is a finished document FROM the seller; a request to
+    make one is ordinary correspondence — set isFinancial = false.
 A document is NOT an invoice merely because it contains amounts, VAT (מע"מ) or
-payment clauses — contracts and quotes contain those too. Require a genuine
-invoice/receipt: an itemised charge with a total that is DUE or was PAID for a
-real transaction. When in doubt, prefer isFinancial = false.
+payment clauses, or because someone writes the word "חשבונית"/"invoice" in a
+message — contracts, quotes, and conversations about billing contain those too.
+Require a genuine invoice/receipt: an itemised charge issued by a seller with a
+total that is DUE or was PAID for a real transaction. When in doubt, prefer
+isFinancial = false.
 
 Respond with ONLY a single JSON object (no markdown, no code fences, no extra
 text) with EXACTLY these keys, in this order:
