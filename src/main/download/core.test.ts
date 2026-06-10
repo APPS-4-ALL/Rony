@@ -651,8 +651,61 @@ describe('downloadApproved — RONY-18 link-based download', () => {
 
     expect(summary).toMatchObject({ downloaded: 1 })
     expect(store.rows).toHaveLength(1)
-    expect(store.rows[0].localFilePath).toContain('__link__')
-    expect(existsSync(join(targetDir, 'msg-link__link__invoice.pdf'))).toBe(true)
+    expect(store.rows[0].localFilePath).toMatch(/__link__invoice\.pdf$/)
+    expect(existsSync(store.rows[0].localFilePath!)).toBe(true)
+  })
+
+  it('extracts vendor/amount from the linked document (AI cannot read a linked file)', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    // AI classified the email financial + got the vendor, but the amount lives
+    // ONLY inside the linked PDF (no attachment to send to vision).
+    const email = linkEmail([{ url: 'https://vendor.co/inv', text: 'לצפיה לחץ כאן' }], 'ai')
+    email.extracted = { vendor: 'אלי שרותי ייעוץ בע"מ', amount: null, currency: null, date: null }
+
+    await downloadApproved([email], {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      fetchLinkDocument: async () => ({
+        bytes: Buffer.from('%PDF-1.7'),
+        filename: 'inv.pdf',
+        mimeType: 'application/pdf'
+      }),
+      // The downloaded document's text yields the total the AI couldn't see.
+      extractDocumentText: async () => 'אלי שרותי ייעוץ בע"מ\nסה"כ לתשלום: 10,620.00 ₪',
+      store
+    })
+
+    expect(store.rows[0]).toMatchObject({
+      vendor: 'אלי שרותי ייעוץ בע"מ', // AI's vendor kept
+      amount: 10620, // filled from the linked PDF
+      currency: 'ILS'
+    })
+  })
+
+  it('dedups the SAME linked document arriving from several emails (thread)', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    // Two different emails (message ids) carrying the identical invoice link.
+    const e1 = linkEmail([{ url: 'https://vendor.co/inv', text: 'לצפיה' }])
+    const e2 = linkEmail([{ url: 'https://vendor.co/inv', text: 'לצפיה' }])
+    e2.email.id = 'msg-link-2'
+
+    const summary = await downloadApproved([e1, e2], {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      // Both links resolve to the byte-identical document.
+      fetchLinkDocument: async () => ({
+        bytes: Buffer.from('%PDF-1.7 identical invoice 19460'),
+        filename: '513514091_DOCUMENT_1_19460.pdf',
+        mimeType: 'application/pdf'
+      }),
+      store
+    })
+
+    // One row for the document, the duplicate counted as skipped.
+    expect(store.rows).toHaveLength(1)
+    expect(summary).toMatchObject({ downloaded: 1, skipped: 1 })
   })
 
   it('does NOT follow links when no fetcher is injected (opt-out default)', async () => {

@@ -45,6 +45,11 @@ describe('scoreInvoiceLink / selectInvoiceLinks', () => {
     expect(scoreInvoiceLink(link('https://x.co/home', 'Read our blog'))).toBe(0)
   })
 
+  it('matches both Hebrew spellings of "view" (צפיה / צפייה), incl. לצפיה', () => {
+    expect(scoreInvoiceLink(link('https://x.co/go', 'לצפיה לחץ כאן'))).toBeGreaterThan(0) // one yod
+    expect(scoreInvoiceLink(link('https://x.co/go', 'לצפייה במסמך'))).toBeGreaterThan(0) // two yods
+  })
+
   it('hard-excludes unsubscribe/social links even if "invoice" appears nearby', () => {
     expect(scoreInvoiceLink(link('https://x.co/unsubscribe?ref=invoice', 'invoice'))).toBe(0)
     expect(scoreInvoiceLink(link('https://facebook.com/vendor', 'Invoice'))).toBe(0)
