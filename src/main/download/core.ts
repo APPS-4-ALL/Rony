@@ -10,7 +10,7 @@ import { access, mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isInvoiceDocument, type GmailAttachmentRef, type ParsedEmail } from '../gmail/parse'
 import { cleanReceiptBody } from '../pdf/cleanBody'
-import type { ValidationResult } from './validate'
+import { validateContent, type ValidationResult } from './validate'
 import type { EngineType, NewInvoice } from '../../shared/types'
 
 /** Extracted invoice fields. The AI engine fills these; the deterministic engine leaves them null. */
@@ -69,6 +69,21 @@ export interface DownloadDeps {
     mimeType: string
     bytes: Buffer
   }) => ValidationResult
+  /**
+   * RONY-17 content check: extract the TEXT inside a downloaded document so we
+   * can confirm it actually reads like an invoice/receipt — not just a
+   * structurally-valid file of something else. Returns the extracted text, or
+   * `null` when text can't be obtained (an image with no text layer, an
+   * encrypted/garbled PDF, an unsupported type, or an extraction error), in
+   * which case the content check is SKIPPED rather than failed. Deterministic
+   * and offline (NO AI). Optional + injected so the core stays pure/testable;
+   * the real impl lives in ./index.ts.
+   */
+  extractDocumentText?: (doc: {
+    filename: string
+    mimeType: string
+    bytes: Buffer
+  }) => Promise<string | null>
   store: InvoiceStore
 }
 
@@ -267,6 +282,38 @@ export async function downloadApproved(
           summary.rejected++
           console.warn(
             `[validate] rejected ${task.filename} (${task.messageId}): ${verdict.reason}`
+          )
+          return
+        }
+      }
+
+      // RONY-17 content gate: confirm the document's TEXT reads like an
+      // invoice/receipt. Conservative — only a clear mismatch (text extracted,
+      // zero keywords) rejects; images / unreadable / extraction-error docs are
+      // skipped (never dropped on content). Runs for BOTH engines.
+      if (!recorded && deps.extractDocumentText) {
+        let text: string | null = null
+        try {
+          text = await deps.extractDocumentText({
+            filename: task.filename,
+            mimeType: task.mimeType,
+            bytes
+          })
+        } catch (e) {
+          console.warn(
+            `[validate] text extraction failed for ${task.filename} (${task.messageId}) — skipping content check:`,
+            e
+          )
+        }
+        const content = validateContent(text)
+        if (content.skipped) {
+          console.info(
+            `[validate] content check skipped for ${task.filename} (no extractable text)`
+          )
+        } else if (!content.valid) {
+          summary.rejected++
+          console.warn(
+            `[validate] rejected ${task.filename} (${task.messageId}): ${content.reason}`
           )
           return
         }

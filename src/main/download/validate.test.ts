@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { detectSignature, validateDocument } from './validate'
+import { detectSignature, validateContent, validateDocument } from './validate'
 
 /* ------------------------------------------------------------------ *
  * Minimal real-format byte fixtures (header + padding past the 16-byte floor).
@@ -151,5 +151,43 @@ describe('validateDocument — RONY-17 authenticity gate', () => {
         bytes: pad(Buffer.from('arbitrary binary payload'))
       }).valid
     ).toBe(true)
+  })
+})
+
+describe('validateContent — RONY-17 content-keyword gate', () => {
+  it('passes Hebrew invoice text and reports the matched keywords', () => {
+    const v = validateContent('חשבונית מס 1234\nסה"כ לתשלום כולל מע"מ: 117 ₪')
+    expect(v.valid).toBe(true)
+    expect(v.skipped).toBe(false)
+    expect(v.matched).toEqual(expect.arrayContaining(['חשבונית', 'חשבונית מס']))
+  })
+
+  it('passes English invoice text', () => {
+    const v = validateContent('TAX INVOICE\nSubtotal: 100\nVAT: 17\nTotal Amount Due: 117')
+    expect(v.valid).toBe(true)
+    expect(v.matched).toEqual(expect.arrayContaining(['invoice', 'total', 'vat']))
+  })
+
+  it('matches Hebrew prefix forms and gershayim/quote variants', () => {
+    // "החשבונית" (the-invoice) and מע״מ written with a gershayim, not an ASCII ".
+    expect(validateContent('להלן פרטי החשבונית שלך').valid).toBe(true)
+    expect(validateContent('כולל מע״מ כחוק').matched).toContain('מע"מ')
+  })
+
+  it('matches a phrase that wraps across a line break', () => {
+    expect(validateContent('TAX\nINVOICE NO 7').matched).toContain('tax invoice')
+  })
+
+  it('rejects a valid document whose text is NOT an invoice (e.g. a boarding pass)', () => {
+    const v = validateContent('BOARDING PASS\nGate 22  Seat 14C\nFlight LY001  Tel Aviv → London')
+    expect(v.valid).toBe(false)
+    expect(v.skipped).toBe(false)
+    expect(v.reason).toMatch(/content_mismatch/)
+  })
+
+  it('SKIPS (does not reject) when no text could be extracted', () => {
+    expect(validateContent(null)).toEqual({ valid: true, skipped: true })
+    expect(validateContent('')).toEqual({ valid: true, skipped: true })
+    expect(validateContent('   \n\t ')).toEqual({ valid: true, skipped: true })
   })
 })

@@ -507,6 +507,77 @@ describe('downloadApproved — RONY-17 document validation', () => {
   })
 })
 
+describe('downloadApproved — RONY-17 content validation', () => {
+  it('records a PDF whose extracted text reads like an invoice', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    const approved = [approvedEmail([att({ filename: 'inv.pdf', attachmentId: 'A1' })])]
+
+    const summary = await downloadApproved(approved, {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      extractDocumentText: async () => 'חשבונית מס 555\nסה"כ לתשלום 100 ₪',
+      store
+    })
+
+    expect(summary).toMatchObject({ downloaded: 1, rejected: 0 })
+    expect(store.rows).toHaveLength(1)
+  })
+
+  it('rejects a valid PDF whose text has no invoice keywords (content_mismatch)', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    const approved = [approvedEmail([att({ filename: 'pass.pdf', attachmentId: 'A1' })])]
+
+    const summary = await downloadApproved(approved, {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      extractDocumentText: async () => 'Boarding pass — gate 5, seat 9A, flight LY1',
+      store
+    })
+
+    expect(summary).toMatchObject({ downloaded: 0, rejected: 1 })
+    expect(store.rows).toHaveLength(0)
+    expect(existsSync(join(targetDir, 'msg1__0__pass.pdf'))).toBe(false)
+  })
+
+  it('keeps an image — content check is skipped (no extractable text)', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    const approved = [
+      approvedEmail([att({ filename: 'receipt.jpg', mimeType: 'image/jpeg', attachmentId: 'A1' })])
+    ]
+
+    const summary = await downloadApproved(approved, {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      extractDocumentText: async () => null, // images yield no extractable text
+      store
+    })
+
+    expect(summary).toMatchObject({ downloaded: 1, rejected: 0 })
+    expect(store.rows).toHaveLength(1)
+  })
+
+  it('does not reject when text extraction throws (encrypted/unreadable PDF)', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    const approved = [approvedEmail([att({ filename: 'locked.pdf', attachmentId: 'A1' })])]
+
+    const summary = await downloadApproved(approved, {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      extractDocumentText: async () => {
+        throw new Error('encrypted PDF')
+      },
+      store
+    })
+
+    expect(summary).toMatchObject({ downloaded: 1, rejected: 0 })
+    expect(store.rows).toHaveLength(1)
+  })
+})
+
 describe('sanitizeFilename', () => {
   it('replaces illegal characters and never returns empty', () => {
     expect(sanitizeFilename('in/voice:2026?.pdf')).toBe('in_voice_2026_.pdf')

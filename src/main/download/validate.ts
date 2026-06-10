@@ -258,3 +258,99 @@ export function validateDocument(doc: DocumentToValidate): ValidationResult {
       return { valid: true }
   }
 }
+
+/* ------------------------------------------------------------------ *
+ * RONY-17 — Content-keyword validation.
+ *
+ * The file-type gate above proves a file is a GENUINE document of its claimed
+ * type; this second gate proves the document actually READS like an
+ * invoice/receipt (and isn't, say, a structurally-valid PDF boarding pass).
+ *
+ * It works on TEXT that a caller extracted from the document (deterministically,
+ * NO AI — see ./index.ts wiring). This module stays pure: it never opens a file,
+ * it only judges text it is handed, so it unit-tests with plain strings.
+ * ------------------------------------------------------------------ */
+
+/**
+ * Invoice/receipt terms (Hebrew + English) we look for inside a document's text.
+ * Substring-matched against a punctuation-normalised haystack, so Hebrew prefix
+ * forms ("החשבונית") and the gershayim/quote variants of מע"מ / סה"כ all match.
+ * Edit this list to tune the content check — no other code changes needed.
+ */
+export const INVOICE_CONTENT_KEYWORDS: readonly string[] = [
+  // Hebrew
+  'חשבונית', // invoice
+  'חשבונית מס', // tax invoice
+  'קבלה', // receipt
+  'סה"כ', // total
+  'מע"מ', // VAT
+  'לתשלום', // for payment / amount due
+  'סכום', // amount/sum
+  'אסמכתא', // reference no. (common on receipts)
+  // English
+  'invoice',
+  'tax invoice',
+  'receipt',
+  'total',
+  'subtotal',
+  'amount',
+  'amount due',
+  'vat',
+  'balance due'
+]
+
+/** Verdict for the content-keyword gate. */
+export interface ContentVerdict {
+  /** True when the document passes (matched a keyword) OR was skipped. */
+  valid: boolean
+  /**
+   * True when we could NOT judge the content (no extractable text — an image,
+   * an encrypted/garbled PDF, or an extraction error) and therefore SKIPPED the
+   * keyword check rather than reject. This is the conservative fallback.
+   */
+  skipped: boolean
+  /** Short reason when invalid. */
+  reason?: string
+  /** Keywords that matched (for logs/transparency). */
+  matched?: string[]
+}
+
+/**
+ * Normalise text for keyword matching: lower-case, drop quotes/gershayim/geresh
+ * (so מע"מ ≈ מע״מ ≈ מעמ), and collapse whitespace (so "tax\ninvoice" matches the
+ * phrase "tax invoice").
+ */
+function normalizeForMatch(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/["'״׳‘’“”]/g, '')
+    .replace(/\s+/g, ' ')
+}
+
+/**
+ * Decide whether extracted document text reads like an invoice/receipt.
+ *
+ * Conservative by design — this gate can only ADD rejections for CLEAR
+ * mismatches, never drop a file we couldn't read:
+ *   - no/blank text (couldn't extract) → `{ valid: true, skipped: true }`
+ *   - text with ≥1 keyword             → `{ valid: true, matched }`
+ *   - text with 0 keywords             → `{ valid: false, reason: 'content_mismatch' }`
+ */
+export function validateContent(
+  text: string | null | undefined,
+  keywords: readonly string[] = INVOICE_CONTENT_KEYWORDS
+): ContentVerdict {
+  if (!text || text.trim().length === 0) {
+    return { valid: true, skipped: true }
+  }
+
+  const haystack = normalizeForMatch(text)
+  const matched = keywords.filter((k) => haystack.includes(normalizeForMatch(k)))
+
+  if (matched.length > 0) return { valid: true, skipped: false, matched }
+  return {
+    valid: false,
+    skipped: false,
+    reason: 'content_mismatch (no invoice/receipt keywords found)'
+  }
+}
