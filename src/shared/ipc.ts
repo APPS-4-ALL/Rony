@@ -7,6 +7,7 @@ export const IpcChannels = {
   invoicesList: 'invoices:list',
   invoicesOpenFile: 'invoices:openFile',
   invoicesDelete: 'invoices:delete',
+  invoicesDeleteAll: 'invoices:deleteAll',
   // --- Step-0 contract additions ---
   authStatus: 'auth:status',
   authLogin: 'auth:login',
