@@ -205,7 +205,7 @@ async function exportCsv(): Promise<void> {
     </p>
 
     <div v-if="props.invoices.length === 0" class="mt-4 text-sm text-slate-500">
-      אין עדיין חשבוניות — הרץ סריקה (או הוסף דוגמה) כדי למלא את הטבלה.
+      אין עדיין חשבוניות — הרץ סריקה כדי למלא את הטבלה.
     </div>
     <div v-else-if="rows.length === 0" class="mt-4 text-sm text-slate-500">
       אין חשבוניות התואמות ל“{{ search }}”.
