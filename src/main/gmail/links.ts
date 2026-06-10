@@ -107,6 +107,7 @@ const POSITIVE_TERMS = [
   'הורדת',
   'צפייה',
   'לצפייה',
+  'צפיה', // one-yod spelling (covers לצפיה / בצפיה too via substring)
   'מסמך',
   'חיוב',
   'אסמכתא',

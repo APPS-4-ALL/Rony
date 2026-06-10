@@ -8,6 +8,7 @@
  */
 import { access, mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { createHash } from 'node:crypto'
 import {
   isInlineImageName,
   isInvoiceDocument,
@@ -445,12 +446,44 @@ export async function downloadApproved(
         }
         if (!doc) return // no link produced a document — fall through to body-only
 
-        if (!(await passesValidation(doc.filename, doc.mimeType, doc.bytes)).ok) return
+        const verdict = await passesValidation(doc.filename, doc.mimeType, doc.bytes)
+        if (!verdict.ok) return
 
-        const targetPath = join(
-          deps.targetDir,
-          `${email.id}__link__${sanitizeFilename(doc.filename)}`
-        )
+        // Dedup by the DOCUMENT's CONTENT, not the email: vendors put the same
+        // invoice link in every message of a thread, so the identical file arrives
+        // from several message ids. Hashing the bytes into the path makes
+        // existsByPath catch it — one row per document, not per email.
+        const hash = createHash('sha256').update(doc.bytes).digest('hex').slice(0, 16)
+        const targetPath = join(deps.targetDir, `${hash}__link__${sanitizeFilename(doc.filename)}`)
+        if (deps.store.existsByPath(targetPath)) {
+          summary.skipped++
+          linkRecorded.add(email.id)
+          return
+        }
+
+        // The AI can't read a LINKED document (there's no attachment to send to
+        // vision), so the vendor/total usually live ONLY in this file. Mine it for
+        // any field the engine left empty — native text first, OCR as fallback.
+        let text = verdict.text
+        if ((!text || !text.trim()) && deps.ocrDocument) {
+          try {
+            text = await deps.ocrDocument({
+              filename: doc.filename,
+              mimeType: doc.mimeType,
+              bytes: doc.bytes
+            })
+          } catch (e) {
+            console.warn(`[ocr] link document OCR failed for ${email.id}:`, e)
+          }
+        }
+        const fields: ExtractedFields = { ...extracted }
+        if (text && text.trim()) {
+          const parsed = extractInvoiceFields(text)
+          fields.vendor ??= parsed.vendor
+          fields.amount ??= parsed.amount
+          fields.currency ??= parsed.currency
+        }
+
         try {
           await writeFile(targetPath, doc.bytes)
         } catch (e) {
@@ -459,7 +492,7 @@ export async function downloadApproved(
           console.error(`[link] failed to save ${doc.filename} for ${email.id}:`, e)
           return
         }
-        if (deps.store.insert(buildInvoice(email, engineType, extracted, targetPath))) {
+        if (deps.store.insert(buildInvoice(email, engineType, fields, targetPath))) {
           summary.downloaded++
           linkRecorded.add(email.id)
         } else {
