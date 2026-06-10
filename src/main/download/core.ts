@@ -16,6 +16,8 @@ import {
 } from '../gmail/parse'
 import { cleanReceiptBody } from '../pdf/cleanBody'
 import { validateContent, type ValidationResult } from './validate'
+import { selectInvoiceLinks, type EmailLink } from '../gmail/links'
+import type { FetchedDocument } from './linkFetch'
 import { extractInvoiceFields } from '../../shared/engines/extract'
 import type { EngineType, NewInvoice } from '../../shared/types'
 
@@ -91,6 +93,15 @@ export interface DownloadDeps {
     bytes: Buffer
   }) => Promise<string | null>
   /**
+   * RONY-18: download an invoice that's behind a LINK rather than attached.
+   * Given the email's ranked candidate links, follows them (redirects + a single
+   * HTML-scrape hop) and returns the fetched document, or null if none yields one.
+   * Optional + injected; when ABSENT, link-following is OFF (the default, and the
+   * opt-in `followLinks` setting is how ./index.ts decides to wire it in). The
+   * real network/security impl lives in ./linkFetch.ts.
+   */
+  fetchLinkDocument?: (links: EmailLink[]) => Promise<FetchedDocument | null>
+  /**
    * OCR fallback for the DETERMINISTIC field extraction only: when a document has
    * no text layer (a scan / photo / image-only PDF), {@link extractDocumentText}
    * returns nothing, so we OCR it to still read vendor + total. Deliberately NOT
@@ -134,6 +145,9 @@ const DOWNLOAD_CONCURRENCY = 5
 
 /** How many body-only PDFs to render at once — each is a real offscreen window. */
 const BODY_PDF_CONCURRENCY = 3
+
+/** How many invoice links to follow at once (each is a network round-trip). */
+const LINK_CONCURRENCY = 3
 
 /**
  * Body cap for the GENERATED PDF — generous, since that text IS the document
@@ -256,6 +270,48 @@ export async function downloadApproved(
   const summary: DownloadSummary = { downloaded: 0, skipped: 0, rejected: 0, errors: 0 }
   await mkdir(deps.targetDir, { recursive: true })
 
+  /**
+   * RONY-17 gates for a NEW document (file-type + content). Returns `ok: false`
+   * and counts a rejection when it fails; logs skips. Also returns the text it
+   * extracted, so callers (the deterministic field extraction) can reuse it
+   * without reading the file twice. Shared by the attachment and RONY-18 link
+   * paths so both validate identically.
+   */
+  const passesValidation = async (
+    filename: string,
+    mimeType: string,
+    bytes: Buffer
+  ): Promise<{ ok: boolean; text: string | null }> => {
+    if (deps.validateDocument) {
+      const verdict = deps.validateDocument({ filename, mimeType, bytes })
+      if (!verdict.valid) {
+        summary.rejected++
+        console.warn(`[validate] rejected ${filename}: ${verdict.reason}`)
+        return { ok: false, text: null }
+      }
+    }
+    let text: string | null = null
+    if (deps.extractDocumentText) {
+      try {
+        text = await deps.extractDocumentText({ filename, mimeType, bytes })
+      } catch (e) {
+        console.warn(
+          `[validate] text extraction failed for ${filename} — skipping content check:`,
+          e
+        )
+      }
+      const content = validateContent(text)
+      if (content.skipped) {
+        console.info(`[validate] content check skipped for ${filename} (no extractable text)`)
+      } else if (!content.valid) {
+        summary.rejected++
+        console.warn(`[validate] rejected ${filename}: ${content.reason}`)
+        return { ok: false, text }
+      }
+    }
+    return { ok: true, text }
+  }
+
   // Resolve the work list up front; the index makes each file name unique.
   const tasks: DownloadTask[] = []
   for (const { email, engineType, extracted } of approved) {
@@ -292,58 +348,16 @@ export async function downloadApproved(
       const bytes = await deps.fetchAttachment(task.messageId, task.attachmentId)
 
       // RONY-17: validate NEW downloads before persisting — drop HTML error
-      // pages, truncated/empty files, and mistyped binaries so they never get
-      // recorded as invoices. A restore (`recorded`) was already validated when
-      // first saved, so we don't re-judge it (and never strand a DB row).
-      if (!recorded && deps.validateDocument) {
-        const verdict = deps.validateDocument({
-          filename: task.filename,
-          mimeType: task.mimeType,
-          bytes
-        })
-        if (!verdict.valid) {
-          summary.rejected++
-          console.warn(
-            `[validate] rejected ${task.filename} (${task.messageId}): ${verdict.reason}`
-          )
-          return
-        }
-      }
-
-      // RONY-17 content gate: confirm the document's TEXT reads like an
-      // invoice/receipt. Conservative — only a clear mismatch (text extracted,
-      // zero keywords) rejects; images / unreadable / extraction-error docs are
-      // skipped (never dropped on content). Runs for BOTH engines.
-      //
-      // `documentText` is hoisted out of this block: the deterministic engine
-      // reuses the very same extracted text below to pull vendor + total, so we
-      // extract once and feed two consumers (no second read of the file).
+      // pages, truncated/empty files, mistyped binaries, and non-invoice content
+      // so they never get recorded. A restore (`recorded`) was already validated
+      // when first saved, so we don't re-judge it (and never strand a DB row).
+      // We keep the extracted text: the deterministic engine reuses it below to
+      // pull vendor + total, so we extract once and feed two consumers.
       let documentText: string | null = null
-      if (!recorded && deps.extractDocumentText) {
-        try {
-          documentText = await deps.extractDocumentText({
-            filename: task.filename,
-            mimeType: task.mimeType,
-            bytes
-          })
-        } catch (e) {
-          console.warn(
-            `[validate] text extraction failed for ${task.filename} (${task.messageId}) — skipping content check:`,
-            e
-          )
-        }
-        const content = validateContent(documentText)
-        if (content.skipped) {
-          console.info(
-            `[validate] content check skipped for ${task.filename} (no extractable text)`
-          )
-        } else if (!content.valid) {
-          summary.rejected++
-          console.warn(
-            `[validate] rejected ${task.filename} (${task.messageId}): ${content.reason}`
-          )
-          return
-        }
+      if (!recorded) {
+        const verdict = await passesValidation(task.filename, task.mimeType, bytes)
+        if (!verdict.ok) return
+        documentText = verdict.text
       }
 
       await writeFile(task.targetPath, bytes)
@@ -397,6 +411,64 @@ export async function downloadApproved(
     }
   })
 
+  // RONY-18 — invoices behind a DOWNLOAD LINK (not attached). For approved
+  // emails with no in-scope attachment, follow the best invoice link and fetch
+  // the document (redirects + one HTML-scrape hop, all in the hardened fetcher).
+  // Gated by the injected `fetchLinkDocument` (the opt-in `followLinks` setting),
+  // runs for BOTH engines, and validates the result via the SAME RONY-17 gates.
+  // Deduped by message id; emails that yield a document are skipped by body-only.
+  const linkRecorded = new Set<string>()
+  if (deps.fetchLinkDocument) {
+    const noAttachment = approved.filter(
+      ({ email }) => !email.attachments.some((a) => a.attachmentId && isInScope(a))
+    )
+    await runWithConcurrency(
+      noAttachment,
+      LINK_CONCURRENCY,
+      async ({ email, engineType, extracted }) => {
+        if (deps.store.existsByMessageId(email.id)) {
+          summary.skipped++
+          linkRecorded.add(email.id) // already have a row — keep body-only off it
+          return
+        }
+        const candidates = selectInvoiceLinks(email.links)
+        if (candidates.length === 0) return
+
+        let doc: FetchedDocument | null = null
+        try {
+          doc = await deps.fetchLinkDocument!(candidates)
+        } catch (e) {
+          summary.errors++
+          summary.firstError ??= e instanceof Error ? e.message : String(e)
+          console.error(`[link] download failed for ${email.id}:`, e)
+          return
+        }
+        if (!doc) return // no link produced a document — fall through to body-only
+
+        if (!(await passesValidation(doc.filename, doc.mimeType, doc.bytes)).ok) return
+
+        const targetPath = join(
+          deps.targetDir,
+          `${email.id}__link__${sanitizeFilename(doc.filename)}`
+        )
+        try {
+          await writeFile(targetPath, doc.bytes)
+        } catch (e) {
+          summary.errors++
+          summary.firstError ??= e instanceof Error ? e.message : String(e)
+          console.error(`[link] failed to save ${doc.filename} for ${email.id}:`, e)
+          return
+        }
+        if (deps.store.insert(buildInvoice(email, engineType, extracted, targetPath))) {
+          summary.downloaded++
+          linkRecorded.add(email.id)
+        } else {
+          summary.skipped++
+        }
+      }
+    )
+  }
+
   // Body-only receipts: approved emails with NO in-scope attachment are real
   // invoices printed in the email body. We turn each into a generated PDF so it
   // becomes a first-class, openable/exportable file; if PDF rendering isn't
@@ -410,7 +482,9 @@ export async function downloadApproved(
   // receipts only when the AI judged the email financial.
   const bodyOnly = approved.filter(
     ({ email, engineType }) =>
-      engineType === 'ai' && !email.attachments.some((a) => a.attachmentId && isInScope(a))
+      engineType === 'ai' &&
+      !linkRecorded.has(email.id) && // RONY-18: a link already produced the file
+      !email.attachments.some((a) => a.attachmentId && isInScope(a))
   )
   await runWithConcurrency(
     bodyOnly,

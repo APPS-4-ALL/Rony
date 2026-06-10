@@ -13,6 +13,7 @@ function email(over: Partial<ParsedEmail>): ParsedEmail {
     snippet: '',
     bodyText: 'body',
     attachments: [],
+    links: [],
     ...over
   }
 }

@@ -13,7 +13,9 @@ export const DEFAULT_SETTINGS: Settings = {
   downloadDir: null,
   // Privacy: the AI engine is OPT-IN. Until the user accepts the consent dialog,
   // no email content is sent to a third-party AI provider.
-  aiConsent: false
+  aiConsent: false,
+  // RONY-18: following invoice links makes outbound requests to vendor sites — OFF by default.
+  followLinks: false
 }
 
 /** Type guard for the scan-engine union. */
@@ -50,5 +52,14 @@ export function coerceDownloadDir(value: unknown): string | null {
  * missing or corrupt entry safely defaults to "not consented" (privacy-first).
  */
 export function coerceAiConsent(value: unknown): boolean {
+  return value === true || value === '1'
+}
+
+/**
+ * Coerce a raw/stored follow-links value to a strict boolean (RONY-18). Stored
+ * as '1'/'0'; anything else reads as `false`, so a missing/corrupt entry safely
+ * defaults to "don't follow links" (no surprise outbound requests).
+ */
+export function coerceFollowLinks(value: unknown): boolean {
   return value === true || value === '1'
 }

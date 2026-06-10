@@ -12,6 +12,7 @@
  * metadata (including the `attachmentId` that RONY-11 needs to download them).
  */
 import type { DeterministicInput } from '../../shared/engines/deterministic'
+import { extractBareUrls, extractLinks, type EmailLink } from './links'
 
 /* ------------------------------------------------------------------ *
  * Minimal Gmail API shapes — only the fields we actually read.
@@ -80,6 +81,11 @@ export interface ParsedEmail {
   /** Decoded, HTML-stripped plain-text body. */
   bodyText: string
   attachments: GmailAttachmentRef[]
+  /**
+   * Hyperlinks found in the body (RONY-18) — used to download invoices that are
+   * behind a "download" link rather than attached. Empty when the body has none.
+   */
+  links: EmailLink[]
 }
 
 /** Decode a base64url string (Gmail's encoding for part bodies) to UTF-8. */
@@ -138,7 +144,7 @@ function isAttachment(part: GmailPart): boolean {
  */
 function collect(
   part: GmailPart | undefined,
-  acc: { plain: string[]; html: string[]; attachments: GmailAttachmentRef[] }
+  acc: { plain: string[]; html: string[]; attachments: GmailAttachmentRef[]; links: EmailLink[] }
 ): void {
   if (!part) return
 
@@ -168,8 +174,24 @@ function collect(
   // Leaf text part.
   const text = decodeBase64Url(part.body?.data)
   if (!text) return
-  if (part.mimeType === 'text/plain') acc.plain.push(text)
-  else if (part.mimeType === 'text/html') acc.html.push(stripHtml(text))
+  if (part.mimeType === 'text/plain') {
+    acc.plain.push(text)
+    acc.links.push(...extractBareUrls(text)) // RONY-18: bare URLs in plain text
+  } else if (part.mimeType === 'text/html') {
+    acc.html.push(stripHtml(text))
+    acc.links.push(...extractLinks(text)) // RONY-18: <a href> links before we strip
+  }
+}
+
+/** De-duplicate links by URL, keeping the first non-empty anchor text seen. */
+function dedupeLinks(links: EmailLink[]): EmailLink[] {
+  const byUrl = new Map<string, EmailLink>()
+  for (const link of links) {
+    const existing = byUrl.get(link.url)
+    if (!existing) byUrl.set(link.url, { ...link })
+    else if (!existing.text && link.text) existing.text = link.text
+  }
+  return [...byUrl.values()]
 }
 
 /** Convert Gmail's internalDate (epoch ms string) to an ISO date, or null. */
@@ -186,7 +208,8 @@ export function parseMessage(msg: GmailMessage): ParsedEmail {
   const acc = {
     plain: [] as string[],
     html: [] as string[],
-    attachments: [] as GmailAttachmentRef[]
+    attachments: [] as GmailAttachmentRef[],
+    links: [] as EmailLink[]
   }
   collect(msg.payload, acc)
 
@@ -201,7 +224,8 @@ export function parseMessage(msg: GmailMessage): ParsedEmail {
     date: isoDateFromInternal(msg.internalDate),
     snippet: msg.snippet ?? '',
     bodyText,
-    attachments: acc.attachments
+    attachments: acc.attachments,
+    links: dedupeLinks(acc.links)
   }
 }
 
