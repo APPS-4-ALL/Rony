@@ -15,7 +15,12 @@
 import type { OAuth2Client } from 'google-auth-library'
 import { getAuthorizedClient } from '../auth'
 import { clearAuth } from '../auth/tokenStore'
-import { AuthExpiredError, isInvalidGrant } from '../auth/errors'
+import {
+  AuthExpiredError,
+  isInsufficientScope,
+  isInvalidGrant,
+  MissingGmailScopeError
+} from '../auth/errors'
 import { backoffMs, isTransientStatus } from './retry'
 import {
   buildSearchQuery,
@@ -76,6 +81,12 @@ async function requestWithRetry<T>(client: OAuth2Client, url: string): Promise<T
       if (isInvalidGrant(e)) {
         clearAuth()
         throw new AuthExpiredError()
+      }
+      // Token is valid but the user never granted Gmail read access — clear it so
+      // they reconnect and approve the permission.
+      if (isInsufficientScope(e)) {
+        clearAuth()
+        throw new MissingGmailScopeError()
       }
       const status = (e as { response?: { status?: number } })?.response?.status
       if (!isTransientStatus(status) || attempt >= MAX_RETRIES) throw e

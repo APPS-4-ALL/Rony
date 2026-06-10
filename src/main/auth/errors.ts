@@ -30,3 +30,33 @@ export function isInvalidGrant(error: unknown): boolean {
   if (e.response?.data?.error === 'invalid_grant') return true
   return typeof e.message === 'string' && e.message.includes('invalid_grant')
 }
+
+/**
+ * Thrown when the connected account did NOT grant the Gmail read scope (Google's
+ * granular-consent screen lets the user decline individual permissions). The
+ * token is otherwise valid but every Gmail call 403s — so we treat it as
+ * "reconnect and approve Gmail access".
+ */
+export class MissingGmailScopeError extends Error {
+  constructor(
+    message = 'לא אושרה גישת קריאה ל-Gmail. יש להתחבר מחדש ולסמן את ההרשאה לקריאת המיילים.'
+  ) {
+    super(message)
+    this.name = 'MissingGmailScopeError'
+  }
+}
+
+/**
+ * True when a Gmail API call failed because the token lacks the required scope
+ * (HTTP 403 "Request had insufficient authentication scopes"). Matched on the
+ * message text, which Gaxios copies from the API error on both `message` and the
+ * structured response body.
+ */
+export function isInsufficientScope(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const e = error as { message?: unknown; response?: { data?: { error?: { message?: string } } } }
+  const needle = /insufficient authentication scopes/i
+  const msg = typeof e.message === 'string' ? e.message : ''
+  const apiMsg = e.response?.data?.error?.message ?? ''
+  return needle.test(msg) || needle.test(apiMsg)
+}
