@@ -54,7 +54,8 @@ function approvedEmail(
     date: '2026-05-01',
     snippet: '',
     bodyText,
-    attachments
+    attachments,
+    links: []
   }
   return { email, engineType: 'deterministic', ...over }
 }
@@ -604,6 +605,93 @@ describe('downloadApproved — RONY-17 content validation', () => {
 
     expect(summary).toMatchObject({ downloaded: 1, rejected: 0 })
     expect(store.rows).toHaveLength(1)
+  })
+})
+
+describe('downloadApproved — RONY-18 link-based download', () => {
+  /** An approved email with a download link and NO attachment. */
+  function linkEmail(
+    links: { url: string; text: string }[],
+    engineType: 'ai' | 'deterministic' = 'deterministic'
+  ): ApprovedEmail {
+    const email: ParsedEmail = {
+      id: 'msg-link',
+      threadId: null,
+      subject: 'החשבונית שלך',
+      from: 'vendor@x.co',
+      date: '2026-05-01',
+      snippet: '',
+      bodyText: 'להורדת החשבונית לחצו על הקישור',
+      attachments: [],
+      links
+    }
+    return { email, engineType }
+  }
+
+  it('follows an invoice link and records the downloaded document', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    const approved = [
+      linkEmail([{ url: 'https://vendor.co/invoice.pdf', text: 'להורדת החשבונית' }])
+    ]
+
+    const summary = await downloadApproved(approved, {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      fetchLinkDocument: async (links) =>
+        links.length > 0
+          ? {
+              bytes: Buffer.from('%PDF-1.7 invoice'),
+              filename: 'invoice.pdf',
+              mimeType: 'application/pdf'
+            }
+          : null,
+      store
+    })
+
+    expect(summary).toMatchObject({ downloaded: 1 })
+    expect(store.rows).toHaveLength(1)
+    expect(store.rows[0].localFilePath).toContain('__link__')
+    expect(existsSync(join(targetDir, 'msg-link__link__invoice.pdf'))).toBe(true)
+  })
+
+  it('does NOT follow links when no fetcher is injected (opt-out default)', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    const approved = [
+      linkEmail([{ url: 'https://vendor.co/invoice.pdf', text: 'Download invoice' }])
+    ]
+
+    const summary = await downloadApproved(approved, {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      store // no fetchLinkDocument → link-following off
+    })
+
+    expect(summary.downloaded).toBe(0)
+    expect(store.rows).toHaveLength(0)
+  })
+
+  it('runs RONY-17 validation on a link-downloaded document (rejects junk)', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    const approved = [linkEmail([{ url: 'https://vendor.co/portal', text: 'View invoice' }])]
+
+    const summary = await downloadApproved(approved, {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      // The link returned an HTML error page disguised as invoice.pdf.
+      fetchLinkDocument: async () => ({
+        bytes: Buffer.from('<!DOCTYPE html><html><body>login required</body></html>'),
+        filename: 'invoice.pdf',
+        mimeType: 'application/pdf'
+      }),
+      validateDocument,
+      store
+    })
+
+    expect(summary).toMatchObject({ downloaded: 0, rejected: 1 })
+    expect(store.rows).toHaveLength(0)
   })
 })
 

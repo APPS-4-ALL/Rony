@@ -4,6 +4,7 @@ import {
   coerceAiProvider,
   coerceDefaultEngine,
   coerceDownloadDir,
+  coerceFollowLinks,
   DEFAULT_SETTINGS,
   isAiProvider,
   isEngineType
@@ -57,5 +58,14 @@ describe('settings validation', () => {
     expect(coerceAiConsent('true')).toBe(false) // only '1'/true count
     expect(coerceAiConsent(undefined)).toBe(false)
     expect(coerceAiConsent(null)).toBe(false)
+  })
+
+  it('defaults follow-links to false and only accepts true/"1" (RONY-18, no surprise requests)', () => {
+    expect(DEFAULT_SETTINGS.followLinks).toBe(false)
+    expect(coerceFollowLinks('1')).toBe(true)
+    expect(coerceFollowLinks(true)).toBe(true)
+    expect(coerceFollowLinks('0')).toBe(false)
+    expect(coerceFollowLinks(undefined)).toBe(false)
+    expect(coerceFollowLinks(null)).toBe(false)
   })
 })

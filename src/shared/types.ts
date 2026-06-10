@@ -87,6 +87,13 @@ export interface Settings {
    * untrusted renderer cannot bypass it).
    */
   aiConsent: boolean
+  /**
+   * RONY-18 opt-in: allow Rony to FOLLOW invoice "download" links found in
+   * emails (not just attachments) and fetch the document over the network from
+   * the vendor's site. Defaults to `false` because it makes outbound requests to
+   * third-party URLs an email points at. Off → only attached/body invoices.
+   */
+  followLinks: boolean
 }
 
 /**

@@ -282,3 +282,28 @@ describe('isInlineImageName — Outlook embedded image/signature detection', () 
     expect(isInlineImageName('image001.pdf')).toBe(false) // PDFs are real documents
   })
 })
+
+describe('parseMessage — RONY-18 link extraction', () => {
+  it('collects <a href> links from the HTML body onto the parsed email', () => {
+    const html = '<p>שלום</p><a href="https://vendor.co.il/inv/5?t=1&amp;u=2">להורדת החשבונית</a>'
+    const msg: GmailMessage = {
+      id: 'm-link',
+      payload: {
+        mimeType: 'text/html',
+        headers: [{ name: 'Subject', value: 'החשבונית שלך' }],
+        body: { data: b64url(html) }
+      }
+    }
+    expect(parseMessage(msg).links).toEqual([
+      { url: 'https://vendor.co.il/inv/5?t=1&u=2', text: 'להורדת החשבונית' }
+    ])
+  })
+
+  it('has an empty links list when the body has none', () => {
+    const msg: GmailMessage = {
+      id: 'm-nolink',
+      payload: { mimeType: 'text/plain', body: { data: b64url('שלום, אין כאן קישור.') } }
+    }
+    expect(parseMessage(msg).links).toEqual([])
+  })
+})

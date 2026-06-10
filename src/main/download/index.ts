@@ -15,6 +15,10 @@ import { renderEmailPdf } from '../pdf'
 import { downloadApproved, type ApprovedEmail, type DownloadSummary } from './core'
 import { validateDocument } from './validate'
 import { extractDocumentText } from './extractText'
+import { createSafeHttpGet, fetchLinkDocument } from './linkFetch'
+
+/** One shared, hardened HTTP transport for all link-following (RONY-18). */
+const safeHttpGet = createSafeHttpGet()
 
 /**
  * Default folder invoices are saved to: `Documents/Rony Invoices`.
@@ -45,6 +49,10 @@ export async function downloadAndRecord(
   const client = getAuthorizedClient()
   if (!client) throw new NotConnectedError()
 
+  // RONY-18: only wire the link follower when the user opted in (`followLinks`),
+  // so Rony never reaches out to vendor URLs without explicit consent.
+  const { followLinks } = getSettings()
+
   return downloadApproved(
     approved,
     {
@@ -54,6 +62,9 @@ export async function downloadAndRecord(
       renderEmailPdf,
       validateDocument,
       extractDocumentText,
+      ...(followLinks
+        ? { fetchLinkDocument: (links) => fetchLinkDocument(links, safeHttpGet) }
+        : {}),
       store: {
         existsByPath: invoiceExistsByPath,
         existsByMessageId: invoiceExistsByMessageId,

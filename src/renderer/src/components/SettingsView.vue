@@ -14,7 +14,8 @@ const settings = ref<Settings>({
   defaultEngine: 'deterministic',
   aiProvider: 'openai',
   downloadDir: null,
-  aiConsent: false
+  aiConsent: false,
+  followLinks: false
 })
 const busy = ref(false)
 const error = ref('')
@@ -43,7 +44,7 @@ function engineLabel(v: EngineType): string {
 function engineDesc(v: EngineType): string {
   return v === 'ai'
     ? 'שולח את טקסט המייל למודל שפה לצורך סיווג וחילוץ שדות. דורש מפתח API.'
-    : 'התאמת מילות מפתח/Regex מקומית ומהירה. ללא מפתח API — עובד לחלוטין במצב לא מקוון.'
+    : 'התאמת מילות מפתח/Regex מקומית ומהירה. ללא מפתח API — סריקה חינמית לחלוטין.'
 }
 
 async function refreshKeyStatus(): Promise<void> {
@@ -139,6 +140,12 @@ const resetFolder = (): Promise<void> =>
     settings.value = await window.api.settings.set({ downloadDir: null })
   })
 
+/** RONY-18: toggle the opt-in "follow invoice download links" setting. */
+const toggleFollowLinks = (): Promise<void> =>
+  guarded(async () => {
+    settings.value = await window.api.settings.set({ followLinks: !settings.value.followLinks })
+  })
+
 const saveApiKey = (): Promise<void> =>
   guarded(async () => {
     const key = apiKeyInput.value.trim()
@@ -231,6 +238,40 @@ onMounted(() => guarded(load))
           איפוס לברירת מחדל
         </button>
       </div>
+    </section>
+
+    <!-- Follow invoice download links (RONY-18) — opt-in -->
+    <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
+      <div class="flex flex-wrap items-start justify-between gap-4">
+        <div class="max-w-xl">
+          <h2 class="text-lg font-semibold">הורדת חשבוניות מקישור</h2>
+          <p class="mt-1 text-sm text-slate-400">
+            חלק מהספקים לא מצרפים את החשבונית אלא שולחים קישור להורדה. כשהאפשרות פעילה, רוני יעקוב
+            אחרי קישור ההורדה שבמייל ויוריד את המסמך.
+            <span class="text-slate-300">
+              שים/י לב: הפעלה מבצעת פניות רשת לאתרי הספקים שאליהם המייל מפנה.
+            </span>
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          :aria-checked="settings.followLinks"
+          class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition disabled:opacity-50"
+          :class="settings.followLinks ? 'bg-emerald-500' : 'bg-slate-700'"
+          :disabled="busy"
+          @click="toggleFollowLinks"
+        >
+          <span
+            class="inline-block h-4 w-4 transform rounded-full bg-white transition"
+            :class="settings.followLinks ? 'translate-x-6' : 'translate-x-1'"
+          />
+        </button>
+      </div>
+      <p class="mt-3 text-xs text-slate-500">
+        מאובטח: רק כתובות https, חסימת כתובות פנימיות, ללא שליחת עוגיות, הגבלת גודל וזמן. כל קובץ
+        שמורד עובר את אותה בדיקת אימות (RONY-17).
+      </p>
     </section>
 
     <!-- Default scan engine -->
