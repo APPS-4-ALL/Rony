@@ -15,7 +15,8 @@ const settings = ref<Settings>({
   aiProvider: 'openai',
   downloadDir: null,
   aiConsent: false,
-  followLinks: false
+  followLinks: false,
+  theme: 'dark'
 })
 const busy = ref(false)
 const error = ref('')

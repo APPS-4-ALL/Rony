@@ -5,6 +5,7 @@ import {
   coerceDefaultEngine,
   coerceDownloadDir,
   coerceFollowLinks,
+  coerceTheme,
   DEFAULT_SETTINGS,
   isAiProvider,
   isEngineType
@@ -67,5 +68,13 @@ describe('settings validation', () => {
     expect(coerceFollowLinks('0')).toBe(false)
     expect(coerceFollowLinks(undefined)).toBe(false)
     expect(coerceFollowLinks(null)).toBe(false)
+  })
+
+  it('defaults theme to dark and coerces invalid values', () => {
+    expect(DEFAULT_SETTINGS.theme).toBe('dark')
+    expect(coerceTheme('light')).toBe('light')
+    expect(coerceTheme('dark')).toBe('dark')
+    expect(coerceTheme('garbage')).toBe('dark')
+    expect(coerceTheme(undefined)).toBe('dark')
   })
 })

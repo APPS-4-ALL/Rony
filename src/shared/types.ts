@@ -67,6 +67,9 @@ export interface AuthStatus {
 /** Supported external LLM providers for the AI engine (RONY-10/16). */
 export type AiProvider = 'openai' | 'gemini'
 
+/** UI colour theme. */
+export type Theme = 'dark' | 'light'
+
 /** User-configurable settings (RONY-12, RONY-16). */
 export interface Settings {
   /** Which engine runs by default when the user hits "Scan now". */
@@ -94,6 +97,8 @@ export interface Settings {
    * third-party URLs an email points at. Off → only attached/body invoices.
    */
   followLinks: boolean
+  /** UI colour theme — 'dark' (default) or 'light'. */
+  theme: Theme
 }
 
 /**

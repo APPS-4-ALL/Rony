@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
-import type { Invoice, ScanOptions, ScanProgress, ScanResult } from '@shared/types'
+import type { Invoice, ScanOptions, ScanProgress, ScanResult, Theme } from '@shared/types'
 import InvoicesTable from './components/InvoicesTable.vue'
 import SettingsView from './components/SettingsView.vue'
 import {
@@ -15,6 +15,36 @@ import logoUrl from './assets/logo.png'
 
 type View = 'dashboard' | 'settings'
 const view = ref<View>('dashboard')
+
+// --- Theme (dark/light) ---
+const theme = ref<Theme>('dark')
+
+/** Apply the theme to the document root: the `.light` class flips the palette. */
+function applyTheme(t: Theme): void {
+  document.documentElement.classList.toggle('light', t === 'light')
+}
+
+/** Toggle dark/light, persist the choice, and apply it immediately. */
+async function toggleTheme(): Promise<void> {
+  theme.value = theme.value === 'dark' ? 'light' : 'dark'
+  applyTheme(theme.value)
+  try {
+    await window.api.settings.set({ theme: theme.value })
+  } catch (e) {
+    console.error('Failed to save theme:', e)
+  }
+}
+
+/** Load the saved theme on startup and apply it. */
+async function loadTheme(): Promise<void> {
+  try {
+    const settings = await window.api.settings.get()
+    theme.value = settings.theme
+    applyTheme(settings.theme)
+  } catch (e) {
+    console.error('Failed to load theme:', e)
+  }
+}
 
 /** Top-level tabs (Hebrew labels). */
 const tabs = [
@@ -104,6 +134,7 @@ function reloadInvoices(): void {
 let unsubscribeProgress: (() => void) | null = null
 /** Subscribe to live progress, then load the table. */
 onMounted(() => {
+  loadTheme()
   unsubscribeProgress = window.api.scan.onProgress((p) => {
     scanProgress.value = p
   })
@@ -120,18 +151,61 @@ onUnmounted(() => {
     <div class="mx-auto max-w-5xl px-6 py-10">
       <!-- Header -->
       <header class="mb-10">
-        <div class="flex items-center gap-3">
-          <img
-            :src="logoUrl"
-            alt="רוני"
-            class="h-12 w-12 rounded-2xl object-cover shadow-lg shadow-emerald-500/20"
-          />
-          <div>
-            <p class="text-lg font-bold leading-none text-slate-100">רוני</p>
-            <p class="mt-1 text-xs font-medium tracking-wide text-emerald-400">
-              כל החשבוניות שלך במקום אחד
-            </p>
+        <div class="flex items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <img
+              :src="logoUrl"
+              alt="רוני"
+              class="h-12 w-12 rounded-2xl object-cover shadow-lg shadow-emerald-500/20"
+            />
+            <div>
+              <p class="text-lg font-bold leading-none text-slate-100">רוני</p>
+              <p class="mt-1 text-xs font-medium tracking-wide text-emerald-400">
+                כל החשבוניות שלך במקום אחד
+              </p>
+            </div>
           </div>
+
+          <!-- Dark / light theme toggle -->
+          <button
+            type="button"
+            class="rounded-lg border border-slate-700 p-2.5 text-slate-300 transition hover:border-slate-500 hover:text-slate-100"
+            :title="theme === 'dark' ? 'מצב בהיר' : 'מצב כהה'"
+            :aria-label="theme === 'dark' ? 'עבור למצב בהיר' : 'עבור למצב כהה'"
+            @click="toggleTheme"
+          >
+            <!-- Sun (shown in dark mode → click to go light) -->
+            <svg
+              v-if="theme === 'dark'"
+              class="h-5 w-5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="4" />
+              <path
+                d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"
+              />
+            </svg>
+            <!-- Moon (shown in light mode → click to go dark) -->
+            <svg
+              v-else
+              class="h-5 w-5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+            </svg>
+          </button>
         </div>
         <h1 class="mt-6 text-4xl font-bold tracking-tight text-slate-50">סורק חשבוניות וקבלות</h1>
         <p class="mt-3 max-w-2xl text-slate-400">

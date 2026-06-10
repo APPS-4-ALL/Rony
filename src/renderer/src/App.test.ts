@@ -7,13 +7,26 @@ import type { Invoice, ScanResult } from '@shared/types'
 const list = vi.fn<() => Promise<Invoice[]>>()
 const scanRun = vi.fn<() => Promise<ScanResult>>()
 
+const DEFAULT_SETTINGS = {
+  defaultEngine: 'deterministic',
+  aiProvider: 'openai',
+  downloadDir: null,
+  aiConsent: false,
+  followLinks: false,
+  theme: 'dark'
+}
+
 function stubApi(): void {
   vi.stubGlobal('api', {
     invoices: {
       list,
       openFile: vi.fn().mockResolvedValue('')
     },
-    scan: { run: scanRun, onProgress: vi.fn(() => () => {}) }
+    scan: { run: scanRun, onProgress: vi.fn(() => () => {}) },
+    settings: {
+      get: vi.fn().mockResolvedValue(DEFAULT_SETTINGS),
+      set: vi.fn().mockResolvedValue(DEFAULT_SETTINGS)
+    }
   })
 }
 
