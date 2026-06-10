@@ -114,6 +114,33 @@ async function removeInvoice(inv: Invoice): Promise<void> {
   emit('deleted')
 }
 
+/** Whether a "remove all" request is in flight (disables the button). */
+const deletingAll = ref(false)
+
+/** Delete EVERY invoice (rows + files). Confirms first — it is irreversible. */
+async function removeAll(): Promise<void> {
+  actionError.value = ''
+  if (deletingAll.value || props.invoices.length === 0) return
+  if (
+    !window.confirm(
+      `למחוק את כל ${props.invoices.length} החשבוניות? הפעולה תמחק גם את הקבצים מהמחשב ואינה הפיכה.`
+    )
+  ) {
+    return
+  }
+  deletingAll.value = true
+  try {
+    const err = await window.api.invoices.deleteAll()
+    if (err) {
+      actionError.value = err
+      return
+    }
+    emit('deleted')
+  } finally {
+    deletingAll.value = false
+  }
+}
+
 const exporting = ref(false)
 const exportNote = ref('')
 
@@ -161,6 +188,14 @@ async function exportCsv(): Promise<void> {
           @click="exportCsv"
         >
           {{ exporting ? 'מייצא…' : 'ייצוא ל-CSV' }}
+        </button>
+        <button
+          class="rounded-lg border border-red-900/70 px-3 py-1.5 text-sm font-semibold text-red-300 transition hover:border-red-500 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-50"
+          :disabled="deletingAll || props.invoices.length === 0"
+          :title="props.invoices.length === 0 ? 'אין מה למחוק' : 'מחיקת כל החשבוניות והקבצים'"
+          @click="removeAll"
+        >
+          {{ deletingAll ? 'מוחק…' : 'מחק הכל' }}
         </button>
       </div>
     </div>

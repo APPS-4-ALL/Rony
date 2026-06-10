@@ -18,6 +18,7 @@ import { cleanReceiptBody } from '../pdf/cleanBody'
 import { validateContent, type ValidationResult } from './validate'
 import { selectInvoiceLinks, type EmailLink } from '../gmail/links'
 import type { FetchedDocument } from './linkFetch'
+import { extractInvoiceFields } from '../../shared/engines/extract'
 import type { EngineType, NewInvoice } from '../../shared/types'
 
 /** Extracted invoice fields. The AI engine fills these; the deterministic engine leaves them null. */
@@ -100,6 +101,19 @@ export interface DownloadDeps {
    * real network/security impl lives in ./linkFetch.ts.
    */
   fetchLinkDocument?: (links: EmailLink[]) => Promise<FetchedDocument | null>
+  /**
+   * OCR fallback for the DETERMINISTIC field extraction only: when a document has
+   * no text layer (a scan / photo / image-only PDF), {@link extractDocumentText}
+   * returns nothing, so we OCR it to still read vendor + total. Deliberately NOT
+   * used by the content gate (OCR is noisy — it must never reject a document).
+   * Optional + injected so the core stays pure/testable; the real impl is in
+   * ./ocr.ts, wired in ./index.ts.
+   */
+  ocrDocument?: (doc: {
+    filename: string
+    mimeType: string
+    bytes: Buffer
+  }) => Promise<string | null>
   store: InvoiceStore
 }
 
@@ -257,25 +271,27 @@ export async function downloadApproved(
   await mkdir(deps.targetDir, { recursive: true })
 
   /**
-   * RONY-17 gates for a NEW document (file-type + content). Returns false and
-   * counts a rejection when it fails; logs skips. Shared by the attachment path
-   * and the RONY-18 link path so both validate identically.
+   * RONY-17 gates for a NEW document (file-type + content). Returns `ok: false`
+   * and counts a rejection when it fails; logs skips. Also returns the text it
+   * extracted, so callers (the deterministic field extraction) can reuse it
+   * without reading the file twice. Shared by the attachment and RONY-18 link
+   * paths so both validate identically.
    */
   const passesValidation = async (
     filename: string,
     mimeType: string,
     bytes: Buffer
-  ): Promise<boolean> => {
+  ): Promise<{ ok: boolean; text: string | null }> => {
     if (deps.validateDocument) {
       const verdict = deps.validateDocument({ filename, mimeType, bytes })
       if (!verdict.valid) {
         summary.rejected++
         console.warn(`[validate] rejected ${filename}: ${verdict.reason}`)
-        return false
+        return { ok: false, text: null }
       }
     }
+    let text: string | null = null
     if (deps.extractDocumentText) {
-      let text: string | null = null
       try {
         text = await deps.extractDocumentText({ filename, mimeType, bytes })
       } catch (e) {
@@ -290,10 +306,10 @@ export async function downloadApproved(
       } else if (!content.valid) {
         summary.rejected++
         console.warn(`[validate] rejected ${filename}: ${content.reason}`)
-        return false
+        return { ok: false, text }
       }
     }
-    return true
+    return { ok: true, text }
   }
 
   // Resolve the work list up front; the index makes each file name unique.
@@ -335,8 +351,13 @@ export async function downloadApproved(
       // pages, truncated/empty files, mistyped binaries, and non-invoice content
       // so they never get recorded. A restore (`recorded`) was already validated
       // when first saved, so we don't re-judge it (and never strand a DB row).
-      if (!recorded && !(await passesValidation(task.filename, task.mimeType, bytes))) {
-        return
+      // We keep the extracted text: the deterministic engine reuses it below to
+      // pull vendor + total, so we extract once and feed two consumers.
+      let documentText: string | null = null
+      if (!recorded) {
+        const verdict = await passesValidation(task.filename, task.mimeType, bytes)
+        if (!verdict.ok) return
+        documentText = verdict.text
       }
 
       await writeFile(task.targetPath, bytes)
@@ -346,8 +367,40 @@ export async function downloadApproved(
         summary.downloaded++
         return
       }
+
+      // Deterministic field extraction: the keyword engine records no
+      // vendor/amount on its own, so we pull the supplier name + grand total off
+      // the document text with regex (see extractInvoiceFields). The AI engine
+      // already supplies these on `task.invoice`, so we only fill the
+      // deterministic gap. We prefer the native text layer; when it is blank (a
+      // scan / photo / image-only PDF) we fall back to OCR. If both come up
+      // empty the fields stay null — visibly flagged for review.
+      let invoice = task.invoice
+      if (invoice.engineType === 'deterministic') {
+        let text = documentText
+        if ((!text || !text.trim()) && deps.ocrDocument) {
+          try {
+            text = await deps.ocrDocument({
+              filename: task.filename,
+              mimeType: task.mimeType,
+              bytes
+            })
+          } catch (e) {
+            console.warn(`[ocr] extraction failed for ${task.filename} (${task.messageId}):`, e)
+          }
+        }
+        if (text && text.trim()) {
+          const fields = extractInvoiceFields(text)
+          invoice = {
+            ...invoice,
+            vendor: fields.vendor,
+            amount: fields.amount,
+            currency: fields.currency
+          }
+        }
+      }
       // New file: record it. A false return means a concurrent scan won the race.
-      if (deps.store.insert(task.invoice)) summary.downloaded++
+      if (deps.store.insert(invoice)) summary.downloaded++
       else summary.skipped++
     } catch (e) {
       summary.errors++
@@ -392,7 +445,7 @@ export async function downloadApproved(
         }
         if (!doc) return // no link produced a document — fall through to body-only
 
-        if (!(await passesValidation(doc.filename, doc.mimeType, doc.bytes))) return
+        if (!(await passesValidation(doc.filename, doc.mimeType, doc.bytes)).ok) return
 
         const targetPath = join(
           deps.targetDir,

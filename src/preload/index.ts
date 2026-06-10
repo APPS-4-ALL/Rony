@@ -10,7 +10,8 @@ const api: RoniApi = {
   invoices: {
     list: () => ipcRenderer.invoke(IpcChannels.invoicesList),
     openFile: (invoiceId) => ipcRenderer.invoke(IpcChannels.invoicesOpenFile, invoiceId),
-    delete: (invoiceId) => ipcRenderer.invoke(IpcChannels.invoicesDelete, invoiceId)
+    delete: (invoiceId) => ipcRenderer.invoke(IpcChannels.invoicesDelete, invoiceId),
+    deleteAll: () => ipcRenderer.invoke(IpcChannels.invoicesDeleteAll)
   },
   auth: {
     status: () => ipcRenderer.invoke(IpcChannels.authStatus),

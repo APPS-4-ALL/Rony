@@ -16,6 +16,7 @@ import { downloadApproved, type ApprovedEmail, type DownloadSummary } from './co
 import { validateDocument } from './validate'
 import { extractDocumentText } from './extractText'
 import { createSafeHttpGet, fetchLinkDocument } from './linkFetch'
+import { ocrDocument } from './ocr'
 
 /** One shared, hardened HTTP transport for all link-following (RONY-18). */
 const safeHttpGet = createSafeHttpGet()
@@ -62,6 +63,7 @@ export async function downloadAndRecord(
       renderEmailPdf,
       validateDocument,
       extractDocumentText,
+      ocrDocument,
       ...(followLinks
         ? { fetchLinkDocument: (links) => fetchLinkDocument(links, safeHttpGet) }
         : {}),
