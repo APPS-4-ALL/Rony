@@ -4,6 +4,46 @@
   color-scheme: dark;
 }
 
+/*
+ * LIGHT THEME — toggled by adding `.light` to <html> (see App.vue).
+ *
+ * The whole UI is styled with Tailwind `slate-*` utilities, and Tailwind v4
+ * compiles those to `var(--color-slate-N)`. So we flip the entire app by
+ * re-mapping the slate ramp here (mirror it: 950↔50, 900↔100, … 500 stays) —
+ * no per-element `dark:` classes needed. A few accent shades are re-tuned so
+ * they stay legible on a pale background.
+ */
+.light {
+  color-scheme: light;
+
+  --color-slate-50: oklch(12.9% 0.042 264.695);
+  --color-slate-100: oklch(20.8% 0.042 265.755);
+  --color-slate-200: oklch(27.9% 0.041 260.031);
+  --color-slate-300: oklch(37.2% 0.044 257.287);
+  --color-slate-400: oklch(44.6% 0.043 257.281);
+  --color-slate-500: oklch(55.4% 0.046 257.417);
+  --color-slate-600: oklch(70.4% 0.04 256.788);
+  --color-slate-700: oklch(86.9% 0.022 252.894);
+  --color-slate-800: oklch(92.9% 0.013 255.508);
+  --color-slate-900: oklch(96.8% 0.007 247.896);
+  --color-slate-950: oklch(98.4% 0.003 247.858);
+
+  /* Emerald text reads too light on white — darken it; the primary button
+     (bg-emerald-500) stays vibrant. */
+  --color-emerald-200: oklch(50.8% 0.118 165.612);
+  --color-emerald-300: oklch(50.8% 0.118 165.612);
+  --color-emerald-400: oklch(59.6% 0.145 163.223);
+
+  /* Error / warning boxes use *-950 backgrounds with light text — flip them to
+     light-tinted boxes with dark text. */
+  --color-red-950: oklch(93.6% 0.032 17.717);
+  --color-red-900: oklch(88.5% 0.062 18.334);
+  --color-red-300: oklch(50.5% 0.213 27.518);
+  --color-red-200: oklch(44.4% 0.177 26.899);
+  --color-amber-950: oklch(96.2% 0.059 95.617);
+  --color-amber-300: oklch(55.5% 0.163 48.998);
+}
+
 html,
 body,
 #app {
@@ -14,4 +54,6 @@ body {
   margin: 0;
   -webkit-user-select: none;
   user-select: none;
+  /* Theme the window background too (avoids a white flash behind the shell). */
+  background: var(--color-slate-950);
 }

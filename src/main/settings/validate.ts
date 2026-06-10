@@ -4,7 +4,7 @@
  * Kept separate from the DB-backed store so the validation/coercion can be
  * unit-tested in isolation.
  */
-import type { AiProvider, EngineType, Settings } from '../../shared/types'
+import type { AiProvider, EngineType, Settings, Theme } from '../../shared/types'
 
 /** Used when nothing is stored yet, or a stored value is invalid/corrupt. */
 export const DEFAULT_SETTINGS: Settings = {
@@ -15,7 +15,9 @@ export const DEFAULT_SETTINGS: Settings = {
   // no email content is sent to a third-party AI provider.
   aiConsent: false,
   // RONY-18: following invoice links makes outbound requests to vendor sites — OFF by default.
-  followLinks: false
+  followLinks: false,
+  // UI theme — dark by default (Rony's original look).
+  theme: 'dark'
 }
 
 /** Type guard for the scan-engine union. */
@@ -62,4 +64,14 @@ export function coerceAiConsent(value: unknown): boolean {
  */
 export function coerceFollowLinks(value: unknown): boolean {
   return value === true || value === '1'
+}
+
+/** Type guard for the UI theme union. */
+export function isTheme(value: unknown): value is Theme {
+  return value === 'dark' || value === 'light'
+}
+
+/** Coerce a raw/stored theme to a valid value, defaulting to dark. */
+export function coerceTheme(value: unknown): Theme {
+  return isTheme(value) ? value : DEFAULT_SETTINGS.theme
 }
