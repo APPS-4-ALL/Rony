@@ -256,6 +256,7 @@ onMounted(() => guarded(load))
         <button
           type="button"
           role="switch"
+          dir="ltr"
           :aria-checked="settings.followLinks"
           class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition disabled:opacity-50"
           :class="settings.followLinks ? 'bg-emerald-500' : 'bg-slate-700'"
@@ -270,7 +271,7 @@ onMounted(() => guarded(load))
       </div>
       <p class="mt-3 text-xs text-slate-500">
         מאובטח: רק כתובות https, חסימת כתובות פנימיות, ללא שליחת עוגיות, הגבלת גודל וזמן. כל קובץ
-        שמורד עובר את אותה בדיקת אימות (RONY-17).
+        שמורד עובר את אותה בדיקת אימות.
       </p>
     </section>
 
