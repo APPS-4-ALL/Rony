@@ -14,11 +14,15 @@ import { getModel, getProviderConfig, resolveProvider } from './config'
 import { AI_SYSTEM_PROMPT, buildUserPrompt } from './prompt'
 import { completeOpenAI } from './providers/openai'
 import { completeGemini } from './providers/gemini'
+import { completeClaude } from './providers/anthropic'
+import { completeGroq } from './providers/groq'
 import type { AiAttachment, AiInput, AiProviderName, AiResult, ProviderComplete } from './types'
 
 const PROVIDERS: Record<AiProviderName, ProviderComplete> = {
   openai: completeOpenAI,
-  gemini: completeGemini
+  gemini: completeGemini,
+  claude: completeClaude,
+  groq: completeGroq
 }
 
 export interface ClassifyOptions {

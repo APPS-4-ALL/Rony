@@ -109,7 +109,7 @@ describe('error handling', () => {
   })
 
   it('rejects an unsupported AI_PROVIDER value', async () => {
-    process.env.AI_PROVIDER = 'claude'
+    process.env.AI_PROVIDER = 'mistral' // openai/gemini/claude/groq are supported
     await expect(classifyWithAI(SAMPLE)).rejects.toThrow(/Unsupported AI_PROVIDER/)
   })
 })

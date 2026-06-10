@@ -65,7 +65,7 @@ export interface AuthStatus {
 }
 
 /** Supported external LLM providers for the AI engine (RONY-10/16). */
-export type AiProvider = 'openai' | 'gemini'
+export type AiProvider = 'openai' | 'gemini' | 'claude' | 'groq'
 
 /** UI colour theme. */
 export type Theme = 'dark' | 'light'

@@ -32,7 +32,7 @@ export function coerceDefaultEngine(value: unknown): EngineType {
 
 /** Type guard for the AI-provider union (RONY-16). */
 export function isAiProvider(value: unknown): value is AiProvider {
-  return value === 'openai' || value === 'gemini'
+  return value === 'openai' || value === 'gemini' || value === 'claude' || value === 'groq'
 }
 
 /** Coerce any raw/stored value into a valid AI provider, falling back to the default. */

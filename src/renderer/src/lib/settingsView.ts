@@ -14,7 +14,7 @@ import type { AiProvider, AuthStatus, EngineType } from '@shared/types'
  */
 export const AI_CONSENT_TITLE = 'הפעלת סריקה חכמה (AI)'
 export const AI_CONSENT_POINTS: readonly string[] = [
-  'תוכן המיילים — הנושא וגוף ההודעה — יישלח לספק AI חיצוני (OpenAI או Gemini) לצורך סיווג וחילוץ פרטים.',
+  'תוכן המיילים — הנושא וגוף ההודעה — יישלח לספק AI חיצוני (OpenAI, Gemini, Claude או Groq) לצורך סיווג וחילוץ פרטים.',
   'גם הקבצים המצורפים (PDF/תמונה) יישלחו לספק כדי לקרוא את הסכום מתוך המסמך.',
   'מזהים רגישים (טלפון, דוא"ל, מספרי חשבון/כרטיס, ת"ז) מוסתרים אוטומטית מהטקסט לפני השליחה.',
   'הסכום, התאריך ושם השולח נשמרים כדי לזהות את הספק והסכום.',
@@ -29,7 +29,9 @@ export interface ProviderOption {
 /** The selectable AI providers, in display order (RONY-16). */
 export const PROVIDER_OPTIONS: readonly ProviderOption[] = [
   { value: 'openai', label: 'OpenAI' },
-  { value: 'gemini', label: 'Gemini' }
+  { value: 'gemini', label: 'Gemini' },
+  { value: 'claude', label: 'Claude' },
+  { value: 'groq', label: 'Groq' }
 ]
 
 export interface EngineOption {
