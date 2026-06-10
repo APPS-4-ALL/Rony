@@ -4,6 +4,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { initDatabase, runStartupSelfTest } from './db'
 import { registerIpcHandlers } from './ipc'
+import { configureOcr, terminateOcr } from './download/ocr'
 
 function createWindow(): void {
   // Create the browser window.
@@ -59,6 +60,9 @@ app.whenReady().then(() => {
   // and cleans up after itself, so it never pollutes a user's dashboard.
   initDatabase()
   if (is.dev) runStartupSelfTest()
+  // OCR (scanned/image invoices) caches its language data under userData so it
+  // downloads once and then works offline.
+  configureOcr({ cacheDir: join(app.getPath('userData'), 'ocr-lang') })
   registerIpcHandlers()
 
   createWindow()
@@ -77,6 +81,11 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
+
+// Tear down the OCR worker so its child process never outlives the app.
+app.on('will-quit', () => {
+  void terminateOcr()
 })
 
 // In this file you can include the rest of your app's specific main process

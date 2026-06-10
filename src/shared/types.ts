@@ -169,6 +169,13 @@ export interface RoniApi {
      * invoice's ID. Resolves with an empty string on success, or an error message.
      */
     delete: (invoiceId: number) => Promise<string>
+    /**
+     * Delete ALL invoices: removes every row and every downloaded file we
+     * control. Files open in another program are skipped (their rows kept) so
+     * the table stays consistent with disk. Resolves with an empty string on
+     * full success, or a message describing what could not be removed.
+     */
+    deleteAll: () => Promise<string>
   }
   /** Google OAuth / Gmail connection (RONY-6, RONY-12). */
   auth: {

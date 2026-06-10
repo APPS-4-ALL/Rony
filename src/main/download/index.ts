@@ -15,6 +15,7 @@ import { renderEmailPdf } from '../pdf'
 import { downloadApproved, type ApprovedEmail, type DownloadSummary } from './core'
 import { validateDocument } from './validate'
 import { extractDocumentText } from './extractText'
+import { ocrDocument } from './ocr'
 
 /**
  * Default folder invoices are saved to: `Documents/Rony Invoices`.
@@ -54,6 +55,7 @@ export async function downloadAndRecord(
       renderEmailPdf,
       validateDocument,
       extractDocumentText,
+      ocrDocument,
       store: {
         existsByPath: invoiceExistsByPath,
         existsByMessageId: invoiceExistsByMessageId,

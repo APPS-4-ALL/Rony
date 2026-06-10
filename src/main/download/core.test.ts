@@ -607,6 +607,128 @@ describe('downloadApproved — RONY-17 content validation', () => {
   })
 })
 
+describe('downloadApproved — deterministic field extraction (vendor + total)', () => {
+  it('fills vendor/amount/currency on the row from the PDF text', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    const approved = [approvedEmail([att({ filename: 'inv.pdf', attachmentId: 'A1' })])]
+
+    await downloadApproved(approved, {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      extractDocumentText: async () =>
+        ['אקמה שירותי ענן בע"מ', 'חשבונית מס 5567', 'מע"מ 17.00', 'סה"כ לתשלום 117.00 ₪'].join(
+          '\n'
+        ),
+      store
+    })
+
+    expect(store.rows).toHaveLength(1)
+    expect(store.rows[0]).toMatchObject({
+      vendor: 'אקמה שירותי ענן בע"מ',
+      amount: 117,
+      currency: 'ILS',
+      engineType: 'deterministic'
+    })
+  })
+
+  it('falls back to OCR when the document has no text layer (scan/image)', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    const approved = [approvedEmail([att({ filename: 'scan.pdf', attachmentId: 'A1' })])]
+
+    await downloadApproved(approved, {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      extractDocumentText: async () => '   ', // blank text layer → scanned doc
+      ocrDocument: async () => 'מקסימום נוחות בע"מ סה"כ לתשלום:₪ 1,990',
+      store
+    })
+
+    expect(store.rows[0]).toMatchObject({
+      vendor: 'מקסימום נוחות בע"מ',
+      amount: 1990,
+      currency: 'ILS'
+    })
+  })
+
+  it('does NOT run OCR when the text layer already yields text', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    const ocr = vi.fn(async () => 'should not be used')
+    const approved = [approvedEmail([att({ attachmentId: 'A1' })])]
+
+    await downloadApproved(approved, {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      extractDocumentText: async () => 'Acme Ltd Total $50.00',
+      ocrDocument: ocr,
+      store
+    })
+
+    expect(ocr).not.toHaveBeenCalled()
+    expect(store.rows[0]).toMatchObject({ vendor: 'Acme Ltd', amount: 50, currency: 'USD' })
+  })
+
+  it('leaves fields null (flagged) when the document has no extractable text (image)', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    const approved = [
+      approvedEmail([att({ filename: 'receipt.jpg', mimeType: 'image/jpeg', attachmentId: 'A1' })])
+    ]
+
+    const summary = await downloadApproved(approved, {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      extractDocumentText: async () => null, // no OCR → images yield no text
+      store
+    })
+
+    expect(summary).toMatchObject({ downloaded: 1, rejected: 0 })
+    expect(store.rows[0]).toMatchObject({ vendor: null, amount: null, currency: null })
+  })
+
+  it('does NOT overwrite AI-extracted fields with the document scan', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    const approved = [
+      approvedEmail([att({ filename: 'inv.pdf', attachmentId: 'A1' })], {
+        engineType: 'ai',
+        extracted: { vendor: 'Acme Ltd', amount: 351, currency: 'ILS', date: '2026-04-30' }
+      })
+    ]
+
+    await downloadApproved(approved, {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      // Even though the document text would extract a different vendor/total, the
+      // AI engine's richer fields win — deterministic extraction only fills gaps.
+      extractDocumentText: async () => 'Other Vendor Inc\nTotal 999.00 USD',
+      store
+    })
+
+    expect(store.rows[0]).toMatchObject({ vendor: 'Acme Ltd', amount: 351, currency: 'ILS' })
+  })
+
+  it('records the row even when no total label is found (vendor only)', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    const approved = [approvedEmail([att({ filename: 'inv.pdf', attachmentId: 'A1' })])]
+
+    await downloadApproved(approved, {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      // Reads like an invoice (passes the content gate) but has no total line.
+      extractDocumentText: async () =>
+        'Sunrise Bakery Ltd\nTax Invoice\nItem A 50.00\nItem B 70.00',
+      store
+    })
+
+    expect(store.rows).toHaveLength(1)
+    expect(store.rows[0]).toMatchObject({ vendor: 'Sunrise Bakery Ltd', amount: null })
+  })
+})
+
 describe('sanitizeFilename', () => {
   it('replaces illegal characters and never returns empty', () => {
     expect(sanitizeFilename('in/voice:2026?.pdf')).toBe('in_voice_2026_.pdf')

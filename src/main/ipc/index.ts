@@ -110,6 +110,49 @@ export function registerIpcHandlers(): void {
     return ''
   })
 
+  // Delete ALL invoices: every downloaded file we control + every row.
+  //
+  // Same safeguards as the single delete, applied per row: only paths INSIDE an
+  // invoices folder we control are ever unlinked, and a file we cannot remove
+  // (locked/open elsewhere) leaves its row in place so file + DB stay
+  // consistent. Returns '' when everything was removed, or a message naming how
+  // many files could not be deleted.
+  ipcMain.handle(IpcChannels.invoicesDeleteAll, async (): Promise<string> => {
+    const invoices = listInvoices()
+    const allowedDirs = [getEffectiveInvoicesDir(), getInvoicesDir()]
+    let removed = 0
+    let kept = 0
+
+    for (const invoice of invoices) {
+      if (invoice.localFilePath) {
+        if (allowedDirs.some((dir) => isPathInsideDir(dir, invoice.localFilePath!))) {
+          try {
+            await unlink(invoice.localFilePath)
+          } catch (e) {
+            // "Already gone" is fine; anything else (usually a locked/open file)
+            // means we keep the row so we never orphan a file we still track.
+            if ((e as NodeJS.ErrnoException).code !== 'ENOENT') {
+              console.error(`[delete] failed to remove file for invoice ${invoice.id}:`, e)
+              kept++
+              continue
+            }
+          }
+        } else {
+          console.error(
+            `[security] refused to delete out-of-bounds file for invoice ${invoice.id}: ${invoice.localFilePath}`
+          )
+        }
+      }
+      deleteInvoice(invoice.id)
+      removed++
+    }
+
+    if (kept > 0) {
+      return `נמחקו ${removed} חשבוניות. ${kept} קבצים כנראה פתוחים בתוכנה אחרת ולא נמחקו — סגור/י אותם ונסה/י שוב.`
+    }
+    return ''
+  })
+
   // --- Auth (REAL — RONY-6) ---
   ipcMain.handle(IpcChannels.authStatus, () => getAuthStatus())
   ipcMain.handle(IpcChannels.authLogin, () => login())
