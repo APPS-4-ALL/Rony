@@ -135,6 +135,20 @@ const NEGATIVE_TERMS = [
   'youtube',
   'tiktok',
   'whatsapp',
+  // Marketing collateral served as a direct file (often .pdf) — a case study,
+  // whitepaper, brochure, etc. These are document TYPES that are never an
+  // invoice, so excluding them is high-precision; it stops a vendor's "download
+  // our case study" link from being followed just because it ends in .pdf.
+  'case study',
+  'case-study',
+  'casestudy',
+  'whitepaper',
+  'white paper',
+  'webinar',
+  'brochure',
+  'datasheet',
+  'ebook',
+  'e-book',
   'הסרה',
   'להסרה',
   'הסרה מרשימת',
@@ -161,13 +175,24 @@ export function scoreInvoiceLink(link: EmailLink): number {
   if (NEGATIVE_TERMS.some((t) => has(hay, t))) return 0
 
   let score = 0
+  let keywordHit = false
   // The anchor TEXT is the strongest signal ("download your invoice").
   for (const t of POSITIVE_TERMS) {
-    if (text && has(text, t)) score += 2
-    else if (has(url, t)) score += 1
+    if (text && has(text, t)) {
+      score += 2
+      keywordHit = true
+    } else if (has(url, t)) {
+      score += 1
+      keywordHit = true
+    }
   }
-  // A URL that directly points at a PDF is a very strong signal.
-  if (/\.pdf(\?|#|$)/i.test(url)) score += 3
+  // A direct .pdf link is a strong signal ONLY when an invoice keyword
+  // corroborates it. On its own a .pdf is just as likely to be marketing
+  // collateral (a case study, a brochure) as an invoice — the keyword-less
+  // marketing PDF that slipped through is exactly this case. So give the full
+  // boost only alongside a keyword; otherwise a small nudge keeps it a
+  // last-resort candidate that never outranks a link naming an invoice.
+  if (/\.pdf(\?|#|$)/i.test(url)) score += keywordHit ? 3 : 1
   return score
 }
 
