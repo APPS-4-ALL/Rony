@@ -190,4 +190,25 @@ describe('validateContent — RONY-17 content-keyword gate', () => {
     expect(validateContent('')).toEqual({ valid: true, skipped: true })
     expect(validateContent('   \n\t ')).toEqual({ valid: true, skipped: true })
   })
+
+  it('rejects a billing FAQ even though it mentions "invoice"', () => {
+    const v = validateContent(
+      'Billing and Payment Frequently Asked Questions. What changes with my invoice? ...'
+    )
+    expect(v.valid).toBe(false)
+    expect(v.reason).toMatch(/non-invoice document/)
+  })
+
+  it('rejects a bank-transfer confirmation (debtor/creditor), not a real invoice', () => {
+    const v = validateContent(
+      'TRANSACTION REFERENCE 0712\nPAYMENT IN AMOUNT 2,664.00 EUR IS EXECUTED\nDEBTOR KRIISP\nCREDITOR ELI (A.B)\nIBAN IL84'
+    )
+    expect(v.valid).toBe(false)
+    expect(v.reason).toMatch(/bank transfer/)
+  })
+
+  it('does NOT pass on the weak "amount" word alone (needs a real invoice term)', () => {
+    expect(validateContent('Total amount paid for your order: 50').valid).toBe(true) // "total" is a real term
+    expect(validateContent('The amount you requested is attached.').valid).toBe(false) // only "amount"
+  })
 })
