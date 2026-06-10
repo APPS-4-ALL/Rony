@@ -11,6 +11,7 @@ import { join } from 'node:path'
 import { isInvoiceDocument, type GmailAttachmentRef, type ParsedEmail } from '../gmail/parse'
 import { cleanReceiptBody } from '../pdf/cleanBody'
 import { validateContent, type ValidationResult } from './validate'
+import { extractInvoiceFields } from '../../shared/engines/extract'
 import type { EngineType, NewInvoice } from '../../shared/types'
 
 /** Extracted invoice fields. The AI engine fills these; the deterministic engine leaves them null. */
@@ -80,6 +81,19 @@ export interface DownloadDeps {
    * the real impl lives in ./index.ts.
    */
   extractDocumentText?: (doc: {
+    filename: string
+    mimeType: string
+    bytes: Buffer
+  }) => Promise<string | null>
+  /**
+   * OCR fallback for the DETERMINISTIC field extraction only: when a document has
+   * no text layer (a scan / photo / image-only PDF), {@link extractDocumentText}
+   * returns nothing, so we OCR it to still read vendor + total. Deliberately NOT
+   * used by the content gate (OCR is noisy — it must never reject a document).
+   * Optional + injected so the core stays pure/testable; the real impl is in
+   * ./ocr.ts, wired in ./index.ts.
+   */
+  ocrDocument?: (doc: {
     filename: string
     mimeType: string
     bytes: Buffer
@@ -291,10 +305,14 @@ export async function downloadApproved(
       // invoice/receipt. Conservative — only a clear mismatch (text extracted,
       // zero keywords) rejects; images / unreadable / extraction-error docs are
       // skipped (never dropped on content). Runs for BOTH engines.
+      //
+      // `documentText` is hoisted out of this block: the deterministic engine
+      // reuses the very same extracted text below to pull vendor + total, so we
+      // extract once and feed two consumers (no second read of the file).
+      let documentText: string | null = null
       if (!recorded && deps.extractDocumentText) {
-        let text: string | null = null
         try {
-          text = await deps.extractDocumentText({
+          documentText = await deps.extractDocumentText({
             filename: task.filename,
             mimeType: task.mimeType,
             bytes
@@ -305,7 +323,7 @@ export async function downloadApproved(
             e
           )
         }
-        const content = validateContent(text)
+        const content = validateContent(documentText)
         if (content.skipped) {
           console.info(
             `[validate] content check skipped for ${task.filename} (no extractable text)`
@@ -326,8 +344,40 @@ export async function downloadApproved(
         summary.downloaded++
         return
       }
+
+      // Deterministic field extraction: the keyword engine records no
+      // vendor/amount on its own, so we pull the supplier name + grand total off
+      // the document text with regex (see extractInvoiceFields). The AI engine
+      // already supplies these on `task.invoice`, so we only fill the
+      // deterministic gap. We prefer the native text layer; when it is blank (a
+      // scan / photo / image-only PDF) we fall back to OCR. If both come up
+      // empty the fields stay null — visibly flagged for review.
+      let invoice = task.invoice
+      if (invoice.engineType === 'deterministic') {
+        let text = documentText
+        if ((!text || !text.trim()) && deps.ocrDocument) {
+          try {
+            text = await deps.ocrDocument({
+              filename: task.filename,
+              mimeType: task.mimeType,
+              bytes
+            })
+          } catch (e) {
+            console.warn(`[ocr] extraction failed for ${task.filename} (${task.messageId}):`, e)
+          }
+        }
+        if (text && text.trim()) {
+          const fields = extractInvoiceFields(text)
+          invoice = {
+            ...invoice,
+            vendor: fields.vendor,
+            amount: fields.amount,
+            currency: fields.currency
+          }
+        }
+      }
       // New file: record it. A false return means a concurrent scan won the race.
-      if (deps.store.insert(task.invoice)) summary.downloaded++
+      if (deps.store.insert(invoice)) summary.downloaded++
       else summary.skipped++
     } catch (e) {
       summary.errors++
