@@ -45,13 +45,15 @@ export async function selectApproved(
   emails: ParsedEmail[],
   engine: EngineType,
   classifiers: Classifiers,
-  onProgress?: ClassifyProgress
+  onProgress?: ClassifyProgress,
+  signal?: AbortSignal
 ): Promise<ClassifyOutcome> {
-  if (engine === 'ai') return selectWithAi(emails, classifiers.ai, onProgress)
+  if (engine === 'ai') return selectWithAi(emails, classifiers.ai, onProgress, signal)
 
   const approved: ApprovedEmail[] = []
   let processed = 0
   for (const email of emails) {
+    if (signal?.aborted) break // user cancelled — stop classifying further emails
     if (classifiers.deterministic(email)) approved.push({ email, engineType: 'deterministic' })
     onProgress?.(++processed, emails.length, approved.length)
   }
@@ -61,7 +63,8 @@ export async function selectApproved(
 async function selectWithAi(
   emails: ParsedEmail[],
   ai: (email: ParsedEmail) => Promise<AiResult>,
-  onProgress?: ClassifyProgress
+  onProgress?: ClassifyProgress,
+  signal?: AbortSignal
 ): Promise<ClassifyOutcome> {
   const approved: ApprovedEmail[] = []
   let errors = 0
@@ -70,7 +73,8 @@ async function selectWithAi(
   let firstError: string | undefined
 
   const worker = async (): Promise<void> => {
-    while (next < emails.length) {
+    // Stop pulling new emails once cancelled; in-flight AI calls finish.
+    while (next < emails.length && !signal?.aborted) {
       const email = emails[next++]
       try {
         const result = await ai(email)

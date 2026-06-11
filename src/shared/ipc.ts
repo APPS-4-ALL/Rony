@@ -18,6 +18,8 @@ export const IpcChannels = {
   settingsHasApiKey: 'settings:hasApiKey',
   settingsClearApiKey: 'settings:clearApiKey',
   scanRun: 'scan:run',
+  /** Request cancellation of the in-flight scan (cooperative; stops between items). */
+  scanCancel: 'scan:cancel',
   /** One-way main → renderer event carrying live scan progress. */
   scanProgress: 'scan:progress',
   dialogSaveFile: 'dialog:saveFile',

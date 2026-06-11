@@ -61,6 +61,8 @@ let badgeTimer: ReturnType<typeof setTimeout> | null = null
 
 // --- RONY-14 + scan robustness: Scan now, live progress ---
 const scanning = ref(false)
+/** True from the moment the user clicks "Cancel" until the scan actually stops. */
+const cancelling = ref(false)
 const scanSummary = ref<ScanResult | null>(null)
 const scanError = ref<string>('')
 const scanProgress = ref<ScanProgress | null>(null)
@@ -118,7 +120,23 @@ async function onScan(): Promise<void> {
     scanError.value = e instanceof Error ? e.message : String(e)
   } finally {
     scanning.value = false
+    cancelling.value = false
     scanProgress.value = null
+  }
+}
+
+/**
+ * Ask the main process to stop the running scan. Cooperative — the scan finishes
+ * its current item, then `scan.run()` resolves with partial counts (`cancelled`).
+ */
+async function onCancelScan(): Promise<void> {
+  if (!scanning.value || cancelling.value) return
+  cancelling.value = true
+  try {
+    await window.api.scan.cancel()
+  } catch (e) {
+    console.error('Failed to cancel scan:', e)
+    cancelling.value = false // let the user try again
   }
 }
 
@@ -244,34 +262,45 @@ onUnmounted(() => {
                 משיכת הודעות אחרונות מ-Gmail, זיהוי חשבוניות וקבלות, והורדתן למחשב.
               </p>
             </div>
-            <button
-              class="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
-              :disabled="scanning"
-              @click="onScan"
-            >
-              <svg
-                v-if="scanning"
-                class="h-4 w-4 animate-spin"
-                viewBox="0 0 24 24"
-                fill="none"
-                aria-hidden="true"
+            <div class="flex items-center gap-3">
+              <button
+                class="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+                :disabled="scanning"
+                @click="onScan"
               >
-                <circle
-                  class="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  stroke-width="4"
-                />
-                <path
-                  class="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                />
-              </svg>
-              {{ scanning ? 'סורק…' : 'סרוק עכשיו' }}
-            </button>
+                <svg
+                  v-if="scanning"
+                  class="h-4 w-4 animate-spin"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <circle
+                    class="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    stroke-width="4"
+                  />
+                  <path
+                    class="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                  />
+                </svg>
+                {{ scanning ? 'סורק…' : 'סרוק עכשיו' }}
+              </button>
+              <!-- Cancel: shown only mid-scan; stops the run cooperatively. -->
+              <button
+                v-if="scanning"
+                class="inline-flex items-center gap-2 rounded-lg border border-red-500/60 px-4 py-2.5 text-sm font-semibold text-red-300 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                :disabled="cancelling"
+                @click="onCancelScan"
+              >
+                {{ cancelling ? 'מבטל…' : 'ביטול' }}
+              </button>
+            </div>
           </div>
 
           <!-- Per-run controls: message count + time range, as quick chips -->
@@ -366,6 +395,9 @@ onUnmounted(() => {
             v-if="scanSummary"
             class="mt-4 rounded-lg bg-slate-800/60 px-3 py-2 text-sm text-slate-300"
           >
+            <span v-if="scanSummary.cancelled" class="font-semibold text-amber-300"
+              >הסריקה בוטלה ·
+            </span>
             נסרקו
             <span class="font-semibold text-slate-100">{{ scanSummary.scanned }}</span> · התאמות
             <span class="font-semibold text-slate-100">{{ scanSummary.matched }}</span> · הורדו

@@ -31,20 +31,41 @@ const DEFAULT_PROVIDER: AiProviderName = 'openai'
 export type ModelTier = 'fast' | 'strong'
 
 const DEFAULT_MODELS: Record<ModelTier, Record<AiProviderName, string>> = {
-  fast: { openai: 'gpt-4o-mini', gemini: 'gemini-2.5-flash' },
-  strong: { openai: 'gpt-4o', gemini: 'gemini-2.5-pro' }
+  fast: {
+    openai: 'gpt-4o-mini',
+    gemini: 'gemini-2.5-flash',
+    claude: 'claude-haiku-4-5',
+    groq: 'llama-3.1-8b-instant'
+  },
+  strong: {
+    openai: 'gpt-4o',
+    gemini: 'gemini-2.5-pro',
+    claude: 'claude-opus-4-8',
+    groq: 'llama-3.3-70b-versatile'
+  }
 }
+
+/** The env-var prefix each provider's overrides use (e.g. ANTHROPIC_MODEL_FAST). */
+const ENV_PREFIX: Record<AiProviderName, string> = {
+  openai: 'OPENAI',
+  gemini: 'GEMINI',
+  claude: 'ANTHROPIC',
+  groq: 'GROQ'
+}
+
+/** The set of provider names we accept. */
+const PROVIDER_NAMES = Object.keys(ENV_PREFIX) as AiProviderName[]
 
 /** Resolve which provider to use (explicit arg > env > default). */
 export function resolveProvider(explicit?: AiProviderName): AiProviderName {
   const raw = (explicit ?? process.env.AI_PROVIDER ?? DEFAULT_PROVIDER).toLowerCase()
-  if (raw === 'openai' || raw === 'gemini') return raw
-  throw new Error(`Unsupported AI_PROVIDER "${raw}" — use "openai" or "gemini".`)
+  if ((PROVIDER_NAMES as string[]).includes(raw)) return raw as AiProviderName
+  throw new Error(`Unsupported AI_PROVIDER "${raw}" — use ${PROVIDER_NAMES.join(', ')}.`)
 }
 
 /** Resolve the model for a provider + tier (env override or default). */
 export function getModel(provider: AiProviderName, tier: ModelTier = 'strong'): string {
-  const prefix = provider === 'openai' ? 'OPENAI' : 'GEMINI'
+  const prefix = ENV_PREFIX[provider]
   const tierEnv = process.env[`${prefix}_MODEL_${tier.toUpperCase()}`]?.trim()
   // Legacy single-model override still applies to the strong tier.
   const legacyEnv = tier === 'strong' ? process.env[`${prefix}_MODEL`]?.trim() : undefined
@@ -57,7 +78,7 @@ export function getModel(provider: AiProviderName, tier: ModelTier = 'strong'): 
  * (the app normally passes the user's stored key — RONY-16).
  */
 export function getProviderConfig(provider: AiProviderName): ProviderConfig {
-  const keyEnv = provider === 'openai' ? 'OPENAI_API_KEY' : 'GEMINI_API_KEY'
+  const keyEnv = `${ENV_PREFIX[provider]}_API_KEY`
   const apiKey = process.env[keyEnv]?.trim()
   if (!apiKey) {
     throw new Error(`${keyEnv} is not set — add your API key in Settings (or a .env for dev).`)

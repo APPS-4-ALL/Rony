@@ -9,8 +9,8 @@ describe('ENGINE_OPTIONS', () => {
 })
 
 describe('PROVIDER_OPTIONS', () => {
-  it('offers the OpenAI + Gemini providers with labels', () => {
-    expect(PROVIDER_OPTIONS.map((o) => o.value)).toEqual(['openai', 'gemini'])
+  it('offers OpenAI, Gemini, Claude + Groq with labels', () => {
+    expect(PROVIDER_OPTIONS.map((o) => o.value)).toEqual(['openai', 'gemini', 'claude', 'groq'])
     for (const o of PROVIDER_OPTIONS) expect(o.label).toBeTruthy()
   })
 })
