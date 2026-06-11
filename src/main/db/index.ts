@@ -5,6 +5,13 @@ import type { Invoice, NewInvoice } from '../../shared/types'
 
 let db: Database.Database | null = null
 
+/**
+ * Current schema version. Bump this whenever you add a migration step in
+ * {@link runMigrations}. Tracked in SQLite's `PRAGMA user_version` so upgrades
+ * run exactly once and in order, instead of re-probing the table shape ad hoc.
+ */
+const SCHEMA_VERSION = 1
+
 /** Maps a raw DB row (snake_case columns) to the camelCase Invoice shape. */
 interface InvoiceRow {
   id: number
@@ -82,18 +89,7 @@ export function initDatabase(): Database.Database {
     );
   `)
 
-  // Migration: add date_source to databases created before it existed (the
-  // CREATE above only adds it to brand-new DBs). No-op once the column is there.
-  const columns = db.prepare(`PRAGMA table_info(invoices)`).all() as Array<{ name: string }>
-  if (!columns.some((c) => c.name === 'date_source')) {
-    db.exec(`ALTER TABLE invoices ADD COLUMN date_source TEXT`)
-  }
-  if (!columns.some((c) => c.name === 'email_body')) {
-    db.exec(`ALTER TABLE invoices ADD COLUMN email_body TEXT`)
-  }
-  if (!columns.some((c) => c.name === 'generated')) {
-    db.exec(`ALTER TABLE invoices ADD COLUMN generated INTEGER NOT NULL DEFAULT 0`)
-  }
+  runMigrations(db)
 
   // Clean up junk left by earlier builds whose startup self-test inserted a
   // "Self-Test Vendor" row on every launch (now removed at insert time).
@@ -101,6 +97,38 @@ export function initDatabase(): Database.Database {
 
   console.log(`[db] SQLite ready at ${dbPath}`)
   return db
+}
+
+/**
+ * Versioned migration runner. Each step upgrades the DB from version N-1 to N
+ * and runs at most once (gated by `PRAGMA user_version`). Brand-new DBs created
+ * by the CREATE TABLE above already have the latest shape, so we just stamp them
+ * to the current version. Existing pre-versioning DBs report version 0 and get
+ * the idempotent column back-fills below.
+ */
+function runMigrations(db: Database.Database): void {
+  const current = db.pragma('user_version', { simple: true }) as number
+  if (current >= SCHEMA_VERSION) return
+
+  // --- v0 → v1: columns added after the original release. The ADD COLUMN guards
+  // are idempotent (skip if the column already exists), so this is safe on both
+  // a fresh CREATE and a long-lived user DB. ---
+  if (current < 1) {
+    const columns = db.prepare(`PRAGMA table_info(invoices)`).all() as Array<{ name: string }>
+    if (!columns.some((c) => c.name === 'date_source')) {
+      db.exec(`ALTER TABLE invoices ADD COLUMN date_source TEXT`)
+    }
+    if (!columns.some((c) => c.name === 'email_body')) {
+      db.exec(`ALTER TABLE invoices ADD COLUMN email_body TEXT`)
+    }
+    if (!columns.some((c) => c.name === 'generated')) {
+      db.exec(`ALTER TABLE invoices ADD COLUMN generated INTEGER NOT NULL DEFAULT 0`)
+    }
+  }
+
+  // Future migrations go here, each guarded by `if (current < N) { … }`.
+
+  db.pragma(`user_version = ${SCHEMA_VERSION}`)
 }
 
 function getDb(): Database.Database {

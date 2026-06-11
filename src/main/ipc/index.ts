@@ -8,6 +8,7 @@ import type {
   ScanResult,
   Settings
 } from '../../shared/types'
+import { MAX_PARSE_BYTES } from '../../shared/limits'
 import { sanitizeScanOptions } from '../scan/options'
 import { deleteInvoice, getInvoiceById, listInvoices } from '../db'
 import { getAuthStatus, getAuthorizedClient, login, logout } from '../auth'
@@ -229,6 +230,16 @@ export function registerIpcHandlers(): void {
       if (!chosen?.attachmentId) return undefined
       try {
         const data = await fetchAttachmentData(client, email.id, chosen.attachmentId)
+        // DoS / cost guard: never inline an oversized payload into a vision call
+        // (huge base64 body, slow upload, large token bill). Fall back to the
+        // text-only result instead.
+        if (data.length > MAX_PARSE_BYTES) {
+          console.warn(
+            `[scan] skipping vision attachment for ${email.id}: ` +
+              `${data.length} bytes exceeds ${MAX_PARSE_BYTES}-byte cap`
+          )
+          return undefined
+        }
         // Send the corrected MIME (a sender may mislabel a PDF as octet-stream).
         const mimeType = visionMimeType(chosen) ?? chosen.mimeType
         return [{ filename: chosen.filename, mimeType, data }]

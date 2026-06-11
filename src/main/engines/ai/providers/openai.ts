@@ -10,6 +10,7 @@
  */
 import type { AiAttachment, ProviderComplete } from '../types'
 import { extractApiError } from './errors'
+import { fetchWithRetry } from './http'
 
 const OPENAI_CHAT_URL = 'https://api.openai.com/v1/chat/completions'
 const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses'
@@ -51,7 +52,7 @@ async function completeChat(
   apiKey: string,
   model: string
 ): Promise<string> {
-  const res = await fetch(OPENAI_CHAT_URL, {
+  const res = await fetchWithRetry(OPENAI_CHAT_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -91,7 +92,7 @@ async function completeResponses(
   model: string,
   attachments: AiAttachment[]
 ): Promise<string> {
-  const res = await fetch(OPENAI_RESPONSES_URL, {
+  const res = await fetchWithRetry(OPENAI_RESPONSES_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

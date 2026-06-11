@@ -8,6 +8,7 @@
  */
 import type { AiAttachment, ProviderComplete } from '../types'
 import { extractApiError } from './errors'
+import { fetchWithRetry } from './http'
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
 
@@ -50,7 +51,7 @@ export const completeGemini: ProviderComplete = async ({ system, user, cfg, atta
     generationConfig.thinkingConfig = { thinkingBudget: 0 }
   }
 
-  const res = await fetch(url, {
+  const res = await fetchWithRetry(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
