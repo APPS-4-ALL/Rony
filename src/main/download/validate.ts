@@ -311,7 +311,14 @@ const NON_INVOICE_MARKERS: readonly string[] = [
   'שאלות נפוצות',
   'שאלות ותשובות',
   'privacy policy',
-  'מדיניות פרטיות'
+  'מדיניות פרטיות',
+  // Legal agreements (e.g. a Non-Disclosure Agreement that rode along as an
+  // attachment of an invoice email). High-precision phrases — never on an invoice.
+  'non-disclosure agreement',
+  'non disclosure agreement',
+  'mutual non-disclosure',
+  'הסכם סודיות',
+  'הסכם אי-גילוי'
 ]
 
 /** Verdict for the content-keyword gate. */
