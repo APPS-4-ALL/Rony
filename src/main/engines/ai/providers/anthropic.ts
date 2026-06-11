@@ -16,6 +16,7 @@
  */
 import type { AiAttachment, ProviderComplete } from '../types'
 import { extractApiError } from './errors'
+import { fetchWithRetry } from './http'
 
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages'
 const ANTHROPIC_VERSION = '2023-06-01'
@@ -54,7 +55,7 @@ export function buildAnthropicContent(
 }
 
 export const completeClaude: ProviderComplete = async ({ system, user, cfg, attachments }) => {
-  const res = await fetch(ANTHROPIC_URL, {
+  const res = await fetchWithRetry(ANTHROPIC_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

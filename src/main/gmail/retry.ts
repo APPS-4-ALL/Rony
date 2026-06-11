@@ -1,13 +1,9 @@
 /**
- * Retry policy for Gmail API calls (pure, dependency-free — unit-testable).
+ * Retry policy for Gmail API calls.
+ *
+ * The implementation now lives in `src/shared/http/retry.ts` so the AI providers
+ * can share the exact same transient-status + back-off policy. This module is
+ * kept as a thin re-export so existing imports (and gmail/retry.test.ts) keep
+ * working unchanged.
  */
-
-/** Whether an HTTP status warrants a retry: 429 rate-limit or any 5xx server error. */
-export function isTransientStatus(status: number | undefined): boolean {
-  return status === 429 || (status !== undefined && status >= 500)
-}
-
-/** Exponential back-off in ms for a given (0-based) retry attempt: capped + jittered. */
-export function backoffMs(attempt: number): number {
-  return Math.min(8000, 500 * 2 ** attempt) + Math.floor(Math.random() * 250)
-}
+export { backoffMs, isTransientStatus } from '../../shared/http/retry'

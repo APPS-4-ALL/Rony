@@ -16,6 +16,8 @@
  * (≥ 22.12, both dev and Electron 39) loads it via `require(ESM)`.
  */
 import { extractText, getDocumentProxy } from 'unpdf'
+import { MAX_PARSE_BYTES } from '../../shared/limits'
+import { logger, maskFile } from '../lib/log'
 
 /** Extensions whose bytes are already plain text. */
 const TEXT_EXTENSIONS = new Set(['csv', 'txt'])
@@ -39,6 +41,17 @@ export async function extractDocumentText(doc: {
   const ext = extensionOf(filename)
   const mime = mimeType.toLowerCase()
 
+  // DoS guard: never parse an oversized payload (decompression bomb / runaway
+  // page count). Skipping returns null → the content gate treats it as "couldn't
+  // judge" and the file is still kept; we just don't auto-extract from it.
+  if (bytes.length > MAX_PARSE_BYTES) {
+    logger.warn(
+      `[validate] skipping text extraction for ${maskFile(filename)}: ` +
+        `${bytes.length} bytes exceeds ${MAX_PARSE_BYTES}-byte parse cap`
+    )
+    return null
+  }
+
   // Plain text / CSV — the bytes ARE the text.
   if (TEXT_EXTENSIONS.has(ext) || mime.startsWith('text/')) {
     return bytes.toString('utf-8')
@@ -52,7 +65,7 @@ export async function extractDocumentText(doc: {
       const { text } = await extractText(pdf, { mergePages: true })
       return Array.isArray(text) ? text.join('\n') : text
     } catch (e) {
-      console.warn(`[validate] unpdf could not read ${filename}:`, e)
+      logger.warn(`[validate] unpdf could not read ${maskFile(filename)}:`, e)
       return null
     }
   }

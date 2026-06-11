@@ -13,11 +13,12 @@
  */
 import type { ProviderComplete } from '../types'
 import { extractApiError } from './errors'
+import { fetchWithRetry } from './http'
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
 
 export const completeGroq: ProviderComplete = async ({ system, user, cfg }) => {
-  const res = await fetch(GROQ_URL, {
+  const res = await fetchWithRetry(GROQ_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

@@ -5,6 +5,7 @@ import icon from '../../resources/icon.png?asset'
 import { initDatabase, runStartupSelfTest } from './db'
 import { registerIpcHandlers } from './ipc'
 import { configureOcr, terminateOcr } from './download/ocr'
+import { warnIfWeakSecureStorage } from './auth/storageHealth'
 
 function createWindow(): void {
   // Create the browser window.
@@ -27,9 +28,27 @@ function createWindow(): void {
     mainWindow.show()
   })
 
-  mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
+  // Open links externally — but ONLY real web URLs. Without this scheme guard a
+  // future renderer-side XSS could ask the OS to launch arbitrary schemes
+  // (file:, smb:, custom protocol handlers). We never open a window in-app.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    try {
+      const { protocol } = new URL(url)
+      if (protocol === 'https:' || protocol === 'http:') void shell.openExternal(url)
+    } catch {
+      /* malformed URL — ignore */
+    }
     return { action: 'deny' }
+  })
+
+  // Hardening: the renderer only ever loads our own bundle. Block any attempt to
+  // navigate the top-level frame elsewhere (a defense against XSS-driven
+  // navigation / phishing). Legitimate external links go through the handler above.
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const isDevServer = is.dev && process.env['ELECTRON_RENDERER_URL']
+    if (isDevServer && url.startsWith(process.env['ELECTRON_RENDERER_URL'] as string)) return
+    if (url.startsWith('file://')) return
+    event.preventDefault()
   })
 
   // HMR for renderer base on electron-vite cli.
@@ -60,6 +79,9 @@ app.whenReady().then(() => {
   // and cleans up after itself, so it never pollutes a user's dashboard.
   initDatabase()
   if (is.dev) runStartupSelfTest()
+  // Surface a weak (plaintext-fallback) secrets backend, mainly relevant on a
+  // Linux system with no keyring installed (DPAPI/Keychain are always strong).
+  warnIfWeakSecureStorage()
   // OCR (scanned/image invoices) caches its language data under userData so it
   // downloads once and then works offline.
   configureOcr({ cacheDir: join(app.getPath('userData'), 'ocr-lang') })

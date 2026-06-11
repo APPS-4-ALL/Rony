@@ -22,6 +22,7 @@ import {
   MissingGmailScopeError
 } from '../auth/errors'
 import { backoffMs, isTransientStatus } from './retry'
+import { logger, maskId } from '../lib/log'
 import {
   buildSearchQuery,
   isInvoiceDocument,
@@ -221,7 +222,7 @@ export async function fetchEmails(options: FetchOptions = {}): Promise<FetchResu
     } catch (e) {
       errors++
       if (!firstError) firstError = e instanceof Error ? e.message : String(e)
-      console.error(`[gmail] failed to fetch/parse message ${id}:`, e)
+      logger.error(`[gmail] failed to fetch/parse message ${maskId(id)}:`, e)
       return null
     }
   })

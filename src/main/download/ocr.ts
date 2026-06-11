@@ -19,6 +19,8 @@
  */
 import { createWorker, type Worker } from 'tesseract.js'
 import { renderPageAsImage } from 'unpdf'
+import { MAX_PARSE_BYTES } from '../../shared/limits'
+import { logger, maskFile } from '../lib/log'
 
 /** Image extensions we OCR directly (mirrors the RONY-7 allowlist). */
 const IMAGE_EXTENSIONS = new Set([
@@ -111,6 +113,17 @@ export async function ocrDocument(doc: {
   bytes: Buffer
 }): Promise<string | null> {
   try {
+    // DoS guard: OCR (and the PDF→PNG render that precedes it) is the most
+    // CPU/memory-hungry path in the app. Refuse oversized input outright so a
+    // crafted huge image / PDF can't pin a core. The file is still kept; we just
+    // leave vendor/amount empty (flagged for review).
+    if (doc.bytes.length > MAX_PARSE_BYTES) {
+      logger.warn(
+        `[ocr] skipping ${maskFile(doc.filename)}: ${doc.bytes.length} bytes exceeds ` +
+          `${MAX_PARSE_BYTES}-byte parse cap`
+      )
+      return null
+    }
     const image = await toImage(doc)
     if (!image) return null
     const text = await enqueue(async () => {
@@ -120,7 +133,7 @@ export async function ocrDocument(doc: {
     })
     return text && text.trim().length > 0 ? text : null
   } catch (e) {
-    console.warn(`[ocr] failed for ${doc.filename}:`, e)
+    logger.warn(`[ocr] failed for ${maskFile(doc.filename)}:`, e)
     return null
   }
 }

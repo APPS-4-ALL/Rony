@@ -20,6 +20,7 @@ import { validateContent, type ValidationResult } from './validate'
 import { selectInvoiceLinks, type EmailLink } from '../gmail/links'
 import type { FetchedDocument } from './linkFetch'
 import { extractInvoiceFields } from '../../shared/engines/extract'
+import { logger, maskFile, maskId } from '../lib/log'
 import type { EngineType, NewInvoice } from '../../shared/types'
 
 /** Extracted invoice fields. The AI engine fills these; the deterministic engine leaves them null. */
@@ -290,7 +291,7 @@ export async function downloadApproved(
       const verdict = deps.validateDocument({ filename, mimeType, bytes })
       if (!verdict.valid) {
         summary.rejected++
-        console.warn(`[validate] rejected ${filename}: ${verdict.reason}`)
+        logger.warn(`[validate] rejected ${maskFile(filename)}: ${verdict.reason}`)
         return { ok: false, text: null }
       }
     }
@@ -299,17 +300,19 @@ export async function downloadApproved(
       try {
         text = await deps.extractDocumentText({ filename, mimeType, bytes })
       } catch (e) {
-        console.warn(
-          `[validate] text extraction failed for ${filename} — skipping content check:`,
+        logger.warn(
+          `[validate] text extraction failed for ${maskFile(filename)} — skipping content check:`,
           e
         )
       }
       const content = validateContent(text)
       if (content.skipped) {
-        console.info(`[validate] content check skipped for ${filename} (no extractable text)`)
+        logger.info(
+          `[validate] content check skipped for ${maskFile(filename)} (no extractable text)`
+        )
       } else if (!content.valid) {
         summary.rejected++
-        console.warn(`[validate] rejected ${filename}: ${content.reason}`)
+        logger.warn(`[validate] rejected ${maskFile(filename)}: ${content.reason}`)
         return { ok: false, text }
       }
     }
@@ -411,7 +414,10 @@ export async function downloadApproved(
                 bytes
               })
             } catch (e) {
-              console.warn(`[ocr] extraction failed for ${task.filename} (${task.messageId}):`, e)
+              logger.warn(
+                `[ocr] extraction failed for ${maskFile(task.filename)} (${maskId(task.messageId)}):`,
+                e
+              )
             }
           }
           if (text && text.trim()) {
@@ -430,7 +436,10 @@ export async function downloadApproved(
       } catch (e) {
         summary.errors++
         summary.firstError ??= e instanceof Error ? e.message : String(e)
-        console.error(`[download] failed for ${task.messageId} / ${task.filename}:`, e)
+        logger.error(
+          `[download] failed for ${maskId(task.messageId)} / ${maskFile(task.filename)}:`,
+          e
+        )
       } finally {
         onProgress?.(++processed, tasks.length)
       }
@@ -467,7 +476,7 @@ export async function downloadApproved(
         } catch (e) {
           summary.errors++
           summary.firstError ??= e instanceof Error ? e.message : String(e)
-          console.error(`[link] download failed for ${email.id}:`, e)
+          logger.error(`[link] download failed for ${maskId(email.id)}:`, e)
           return
         }
         if (!doc) return // no link produced a document — fall through to body-only
@@ -499,7 +508,7 @@ export async function downloadApproved(
               bytes: doc.bytes
             })
           } catch (e) {
-            console.warn(`[ocr] link document OCR failed for ${email.id}:`, e)
+            logger.warn(`[ocr] link document OCR failed for ${maskId(email.id)}:`, e)
           }
         }
         const fields: ExtractedFields = { ...extracted }
@@ -515,7 +524,10 @@ export async function downloadApproved(
         } catch (e) {
           summary.errors++
           summary.firstError ??= e instanceof Error ? e.message : String(e)
-          console.error(`[link] failed to save ${doc.filename} for ${email.id}:`, e)
+          logger.error(
+            `[link] failed to save ${maskFile(doc.filename)} for ${maskId(email.id)}:`,
+            e
+          )
           return
         }
         if (deps.store.insert(buildInvoice(email, engineType, fields, targetPath))) {
@@ -571,7 +583,7 @@ export async function downloadApproved(
           invoice = buildInvoice(email, engineType, extracted, targetPath, true)
         } catch (e) {
           summary.firstError ??= e instanceof Error ? e.message : String(e)
-          console.error(`[pdf] generation failed for ${email.id} (keeping body-only):`, e)
+          logger.error(`[pdf] generation failed for ${maskId(email.id)} (keeping body-only):`, e)
         }
       }
 
