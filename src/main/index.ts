@@ -20,7 +20,14 @@ function createWindow(): void {
     icon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      // Hardening: run the renderer in the OS sandbox and keep it fully isolated
+      // from Node. contextIsolation + nodeIntegration:false are the modern
+      // defaults, but we set them explicitly so the security posture is visible
+      // and can't silently regress. The preload reaches main only via the typed
+      // contextBridge surface in src/preload/index.ts.
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false
     }
   })
 
