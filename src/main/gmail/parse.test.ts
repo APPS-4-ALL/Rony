@@ -8,7 +8,11 @@ import {
   isPdfOrImage,
   isInlineImageName,
   buildSearchQuery,
+  MAX_MIME_DEPTH,
+  MAX_ATTACHMENTS_PER_EMAIL,
+  MAX_BODY_BYTES,
   type GmailMessage,
+  type GmailPart,
   type GmailAttachmentRef
 } from './parse'
 import { classifyDeterministic } from '../../shared/engines/deterministic'
@@ -305,5 +309,94 @@ describe('parseMessage — RONY-18 link extraction', () => {
       payload: { mimeType: 'text/plain', body: { data: b64url('שלום, אין כאן קישור.') } }
     }
     expect(parseMessage(msg).links).toEqual([])
+  })
+})
+
+describe('parseMessage — DoS guards on the MIME walk', () => {
+  /** Wrap `leaf` in `levels` nested multipart parts (leaf ends up at that depth). */
+  function nest(levels: number, leaf: GmailPart): GmailPart {
+    let part = leaf
+    for (let i = 0; i < levels; i++) {
+      part = { mimeType: 'multipart/mixed', parts: [part] }
+    }
+    return part
+  }
+
+  it('walks nesting up to the depth cap and keeps that content', () => {
+    const leaf: GmailPart = { mimeType: 'text/plain', body: { data: b64url('INVOICE-AT-LIMIT') } }
+    // Leaf sits exactly at MAX_MIME_DEPTH (root payload is depth 0).
+    const msg: GmailMessage = { id: 'deep-ok', payload: nest(MAX_MIME_DEPTH, leaf) }
+    expect(parseMessage(msg).bodyText).toBe('INVOICE-AT-LIMIT')
+  })
+
+  it('abandons branches nested past the depth cap without crashing', () => {
+    const leaf: GmailPart = { mimeType: 'text/plain', body: { data: b64url('TOO-DEEP') } }
+    const msg: GmailMessage = { id: 'deep-bad', payload: nest(MAX_MIME_DEPTH + 5, leaf) }
+    const parsed = parseMessage(msg)
+    expect(parsed.bodyText).toBe('') // content below the cap is never collected
+  })
+
+  it('does not overflow the stack on pathologically deep nesting', () => {
+    const leaf: GmailPart = { mimeType: 'text/plain', body: { data: b64url('x') } }
+    const msg: GmailMessage = { id: 'bomb-depth', payload: nest(20_000, leaf) }
+    expect(() => parseMessage(msg)).not.toThrow()
+  })
+
+  it('caps the number of attachments recorded per message', () => {
+    const overflow = MAX_ATTACHMENTS_PER_EMAIL + 50
+    const parts: GmailPart[] = Array.from({ length: overflow }, (_, i) => ({
+      mimeType: 'application/pdf',
+      filename: `inv-${i}.pdf`,
+      body: { attachmentId: `att-${i}`, size: 1 }
+    }))
+    const msg: GmailMessage = { id: 'bomb-att', payload: { mimeType: 'multipart/mixed', parts } }
+    expect(parseMessage(msg).attachments).toHaveLength(MAX_ATTACHMENTS_PER_EMAIL)
+  })
+
+  it('truncates an oversized single body part to the byte cap', () => {
+    const huge = 'a'.repeat(MAX_BODY_BYTES + 1000) // ASCII → 1 byte/char
+    const msg: GmailMessage = {
+      id: 'bomb-body',
+      payload: { mimeType: 'text/plain', body: { data: b64url(huge) } }
+    }
+    const { bodyText } = parseMessage(msg)
+    expect(Buffer.byteLength(bodyText, 'utf-8')).toBe(MAX_BODY_BYTES)
+  })
+
+  it('caps total retained body across many text parts (multipart bomb)', () => {
+    const chunk = 'b'.repeat(100_000)
+    const partCount = Math.ceil(MAX_BODY_BYTES / chunk.length) + 20 // overshoots the cap
+    const parts: GmailPart[] = Array.from({ length: partCount }, () => ({
+      mimeType: 'text/plain',
+      body: { data: b64url(chunk) }
+    }))
+    const msg: GmailMessage = { id: 'bomb-multi', payload: { mimeType: 'multipart/mixed', parts } }
+    const { bodyText } = parseMessage(msg)
+    expect(Buffer.byteLength(bodyText, 'utf-8')).toBeLessThanOrEqual(MAX_BODY_BYTES)
+    expect(bodyText.length).toBeGreaterThan(0)
+  })
+
+  it('does not truncate a normal-sized body', () => {
+    const body = 'Your invoice total is 100 ILS. תודה.'
+    const msg: GmailMessage = {
+      id: 'normal',
+      payload: { mimeType: 'text/plain', body: { data: b64url(body) } }
+    }
+    expect(parseMessage(msg).bodyText).toBe(body)
+  })
+
+  it('truncates a multi-byte body on a code-point boundary (no corruption)', () => {
+    // '€' is 3 UTF-8 bytes and the 2 MiB cap is not a multiple of 3, so the cut
+    // necessarily lands mid-character — the guard must drop the partial char.
+    const euro = '€'
+    const huge = euro.repeat(Math.ceil(MAX_BODY_BYTES / 3) + 100)
+    const msg: GmailMessage = {
+      id: 'utf8',
+      payload: { mimeType: 'text/plain', body: { data: b64url(huge) } }
+    }
+    const { bodyText } = parseMessage(msg)
+    expect(Buffer.byteLength(bodyText, 'utf-8')).toBeLessThanOrEqual(MAX_BODY_BYTES)
+    // Only whole euro signs survive — no severed code point / U+FFFD replacement.
+    expect(bodyText).toMatch(/^€+$/)
   })
 })

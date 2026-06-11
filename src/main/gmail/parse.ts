@@ -137,18 +137,66 @@ function isAttachment(part: GmailPart): boolean {
   return Boolean(part.filename && part.filename.trim())
 }
 
+/* ------------------------------------------------------------------ *
+ * DoS guards for the MIME walk.
+ *
+ * The structure and bytes of a message are attacker-influenced — anyone who can
+ * email the user. A crafted message can nest parts thousands deep (overflowing
+ * the recursion stack), declare tens of thousands of attachment parts (memory),
+ * or carry a giant text body (memory now, plus CPU later in stripHtml / the
+ * keyword classifier / regex extractors). We bound all three here. Hitting a cap
+ * degrades gracefully: we keep whatever we collected up to the limit and stop —
+ * a normal email never comes close to any of these.
+ * ------------------------------------------------------------------ */
+
+/** Deepest MIME nesting we will walk before abandoning a branch. */
+export const MAX_MIME_DEPTH = 50
+
+/** Most attachment parts we will record for a single message. */
+export const MAX_ATTACHMENTS_PER_EMAIL = 500
+
+/** Most decoded body text (UTF-8 bytes) we retain across all text parts. */
+export const MAX_BODY_BYTES = 2 * 1024 * 1024
+
+/** Truncate `text` to at most `maxBytes` UTF-8 bytes, on a code-point boundary. */
+function truncateToBytes(text: string, maxBytes: number): string {
+  const buf = Buffer.from(text, 'utf-8')
+  if (buf.length <= maxBytes) return text
+  // Back the cut off any partial multi-byte code point so we never decode a
+  // severed char (which would surface as a U+FFFD replacement and could even
+  // re-encode past the cap). UTF-8 continuation bytes match 0b10xxxxxx; step
+  // back until the boundary sits on a leading byte.
+  let end = maxBytes
+  while (end > 0 && (buf[end] & 0xc0) === 0x80) end--
+  return buf.subarray(0, end).toString('utf-8')
+}
+
 /**
  * Depth-first walk of the MIME tree, collecting decoded text and attachments.
  * Prefers text/plain; only falls back to (stripped) text/html when no plain
  * alternative was found, so we don't double-count the same content twice.
+ *
+ * `depth` tracks how deep we have recursed (for the MAX_MIME_DEPTH guard) and
+ * `acc.bytes` the running total of retained body text (for MAX_BODY_BYTES).
  */
 function collect(
   part: GmailPart | undefined,
-  acc: { plain: string[]; html: string[]; attachments: GmailAttachmentRef[]; links: EmailLink[] }
+  acc: {
+    plain: string[]
+    html: string[]
+    attachments: GmailAttachmentRef[]
+    links: EmailLink[]
+    bytes: number
+  },
+  depth = 0
 ): void {
-  if (!part) return
+  // DoS guard: stop before pathologically deep nesting can overflow the stack
+  // (a malicious message can nest message/rfc822 parts thousands deep).
+  if (!part || depth > MAX_MIME_DEPTH) return
 
   if (isAttachment(part)) {
+    // DoS guard: cap the number of attachment parts we record per message.
+    if (acc.attachments.length >= MAX_ATTACHMENTS_PER_EMAIL) return
     // Inline parts (signature logos, embedded body images) carry a Content-ID
     // and/or `Content-Disposition: inline`. A real attached file is `attachment`
     // (or unspecified). We flag inline so the invoice scan can ignore logos.
@@ -167,19 +215,30 @@ function collect(
   }
 
   if (part.parts && part.parts.length > 0) {
-    for (const child of part.parts) collect(child, acc)
+    for (const child of part.parts) collect(child, acc, depth + 1)
     return
   }
 
   // Leaf text part.
-  const text = decodeBase64Url(part.body?.data)
-  if (!text) return
+  const decoded = decodeBase64Url(part.body?.data)
+  if (!decoded) return
+  // DoS guard: keep total retained body under MAX_BODY_BYTES. Truncate this
+  // piece to the remaining budget and stop once it's spent, so a multipart
+  // "bomb" of many large text parts can't exhaust memory.
+  const remaining = MAX_BODY_BYTES - acc.bytes
+  if (remaining <= 0) return
+  const text = truncateToBytes(decoded, remaining)
+  // The retained pieces are later join('\n')-ed, so each one also costs the byte
+  // of its separator. Charging +1 here keeps the FINAL joined body under the cap
+  // even when an attacker uses many tiny parts.
   if (part.mimeType === 'text/plain') {
     acc.plain.push(text)
     acc.links.push(...extractBareUrls(text)) // RONY-18: bare URLs in plain text
+    acc.bytes += Buffer.byteLength(text, 'utf-8') + 1
   } else if (part.mimeType === 'text/html') {
     acc.html.push(stripHtml(text))
     acc.links.push(...extractLinks(text)) // RONY-18: <a href> links before we strip
+    acc.bytes += Buffer.byteLength(text, 'utf-8') + 1
   }
 }
 
@@ -209,7 +268,8 @@ export function parseMessage(msg: GmailMessage): ParsedEmail {
     plain: [] as string[],
     html: [] as string[],
     attachments: [] as GmailAttachmentRef[],
-    links: [] as EmailLink[]
+    links: [] as EmailLink[],
+    bytes: 0
   }
   collect(msg.payload, acc)
 

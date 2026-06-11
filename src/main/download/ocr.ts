@@ -36,6 +36,23 @@ const IMAGE_EXTENSIONS = new Set([
   'heif'
 ])
 
+/**
+ * Hard ceiling on a single OCR recognition. Tesseract can hang on pathological
+ * input (a huge or adversarial image); with no deadline that pins a CPU core
+ * indefinitely and — because recognitions are serialised on one worker — blocks
+ * every later OCR behind it. On timeout we abandon the job and recycle the
+ * worker (see ocrDocument) so the queue keeps moving.
+ */
+const OCR_TIMEOUT_MS = 30_000
+
+/** Distinct error so the timeout path can be told apart from a normal failure. */
+class OcrTimeoutError extends Error {
+  constructor() {
+    super(`OCR timed out after ${OCR_TIMEOUT_MS}ms`)
+    this.name = 'OcrTimeoutError'
+  }
+}
+
 /** Where tesseract caches the (downloaded-once) language data. Set by the wiring. */
 let cacheDir: string | undefined
 
@@ -128,8 +145,26 @@ export async function ocrDocument(doc: {
     if (!image) return null
     const text = await enqueue(async () => {
       const worker = await getWorker()
-      const { data } = await worker.recognize(image)
-      return data.text
+      const recognition = worker.recognize(image).then(({ data }) => data.text)
+      // The recognition may settle AFTER we've timed out and recycled the worker;
+      // swallow that late result/rejection so it never surfaces as an unhandled
+      // rejection.
+      recognition.catch(() => undefined)
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const timeout = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new OcrTimeoutError()), OCR_TIMEOUT_MS)
+      })
+      try {
+        return await Promise.race([recognition, timeout])
+      } catch (e) {
+        // A hung recognition leaves the shared worker stuck on a zombie job;
+        // tear it down so the NEXT document gets a fresh worker instead of
+        // queueing behind the wedged one.
+        if (e instanceof OcrTimeoutError) await terminateOcr()
+        throw e
+      } finally {
+        if (timer) clearTimeout(timer)
+      }
     })
     return text && text.trim().length > 0 ? text : null
   } catch (e) {
