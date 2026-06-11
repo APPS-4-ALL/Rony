@@ -199,6 +199,14 @@ describe('validateContent — RONY-17 content-keyword gate', () => {
     expect(v.reason).toMatch(/non-invoice document/)
   })
 
+  it('rejects a legal agreement (NDA) that rode along as an attachment', () => {
+    const v = validateContent(
+      'MUTUAL NON-DISCLOSURE AGREEMENT\nbetween Kriisp Ltd. and Elie (E.B) Consulting & Marketing Ltd.'
+    )
+    expect(v.valid).toBe(false)
+    expect(v.reason).toMatch(/non-invoice document/)
+  })
+
   it('rejects a bank-transfer confirmation (debtor/creditor), not a real invoice', () => {
     const v = validateContent(
       'TRANSACTION REFERENCE 0712\nPAYMENT IN AMOUNT 2,664.00 EUR IS EXECUTED\nDEBTOR KRIISP\nCREDITOR ELI (A.B)\nIBAN IL84'

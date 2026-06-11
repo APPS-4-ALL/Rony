@@ -339,6 +339,11 @@ export async function downloadApproved(
     })
   }
 
+  // Content hashes saved this run — dedups the same file arriving from several
+  // emails (a reply thread that re-attaches it), which the message-id-keyed
+  // targetPath can't catch on its own.
+  const seenContentHashes = new Set<string>()
+
   let processed = 0
   await runWithConcurrency(
     tasks,
@@ -353,6 +358,19 @@ export async function downloadApproved(
         }
 
         const bytes = await deps.fetchAttachment(task.messageId, task.attachmentId)
+
+        // Dedup identical content from MULTIPLE emails in this scan: targetPath is
+        // keyed on the message id, so the same bytes under a different message id
+        // (a thread re-attaching the file) would otherwise be saved again. Reserve
+        // the hash synchronously so concurrent workers can't both pass the check.
+        const contentHash = createHash('sha256').update(bytes).digest('hex')
+        if (!recorded) {
+          if (seenContentHashes.has(contentHash)) {
+            summary.skipped++
+            return
+          }
+          seenContentHashes.add(contentHash)
+        }
 
         // RONY-17: validate NEW downloads before persisting — drop HTML error
         // pages, truncated/empty files, mistyped binaries, and non-invoice content

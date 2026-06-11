@@ -126,6 +126,25 @@ describe('downloadApproved — RONY-11 DoD', () => {
     expect(store.rows).toHaveLength(1) // no duplicate row
   })
 
+  it('dedups the SAME attachment arriving from several emails in one scan (thread)', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    // Two different emails (message ids) each attaching the byte-identical file.
+    const e1 = approvedEmail([att({ filename: 'NDA.pdf', attachmentId: 'A1' })])
+    const e2 = approvedEmail([att({ filename: 'NDA.pdf', attachmentId: 'A2' })])
+    e2.email.id = 'msg2'
+    const identical = Buffer.from('IDENTICAL PDF CONTENT')
+
+    const summary = await downloadApproved([e1, e2], {
+      targetDir,
+      fetchAttachment: async () => identical, // both emails return the same bytes
+      store
+    })
+
+    expect(store.rows).toHaveLength(1) // one row for the document, not one per email
+    expect(summary).toMatchObject({ downloaded: 1, skipped: 1 })
+  })
+
   it('downloads the real attachment but skips an inline signature logo', async () => {
     const targetDir = tempDir()
     const store = fakeStore()
