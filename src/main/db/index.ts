@@ -2,6 +2,14 @@ import { join } from 'path'
 import { app } from 'electron'
 import Database from 'better-sqlite3'
 import type { Invoice, NewInvoice } from '../../shared/types'
+import {
+  encryptText,
+  decryptText,
+  encryptAmount,
+  decryptAmount,
+  ensureEncryptedText,
+  ensureEncryptedAmount
+} from './fieldCrypto'
 
 let db: Database.Database | null = null
 
@@ -10,19 +18,24 @@ let db: Database.Database | null = null
  * {@link runMigrations}. Tracked in SQLite's `PRAGMA user_version` so upgrades
  * run exactly once and in order, instead of re-probing the table shape ad hoc.
  */
-const SCHEMA_VERSION = 1
+const SCHEMA_VERSION = 2
 
-/** Maps a raw DB row (snake_case columns) to the camelCase Invoice shape. */
+/**
+ * Maps a raw DB row (snake_case columns) to the camelCase Invoice shape. The
+ * encrypted-at-rest columns (`vendor`, `amount`, `email_body`) come back as a
+ * Buffer (ciphertext) on encrypted rows or a string/number on legacy rows, so
+ * they are typed loosely and run through the field-crypto decoders below.
+ */
 interface InvoiceRow {
   id: number
   message_id: string | null
   date: string | null
   date_source: Invoice['dateSource']
-  vendor: string | null
-  amount: number | null
+  vendor: string | Buffer | null
+  amount: number | Buffer | null
   currency: string | null
   local_file_path: string | null
-  email_body: string | null
+  email_body: string | Buffer | null
   generated: number
   status: Invoice['status']
   engine_type: Invoice['engineType']
@@ -35,11 +48,11 @@ function rowToInvoice(row: InvoiceRow): Invoice {
     messageId: row.message_id,
     date: row.date,
     dateSource: row.date_source ?? null,
-    vendor: row.vendor,
-    amount: row.amount,
+    vendor: decryptText(row.vendor),
+    amount: decryptAmount(row.amount),
     currency: row.currency,
     localFilePath: row.local_file_path,
-    emailBody: row.email_body ?? null,
+    emailBody: decryptText(row.email_body),
     generated: row.generated === 1,
     status: row.status,
     engineType: row.engine_type,
@@ -126,9 +139,50 @@ function runMigrations(db: Database.Database): void {
     }
   }
 
+  // --- v1 → v2: encrypt the sensitive columns (vendor, amount, email_body) of
+  // rows written before encryption-at-rest existed. ---
+  if (current < 2) {
+    encryptExistingRows(db)
+  }
+
   // Future migrations go here, each guarded by `if (current < N) { … }`.
 
   db.pragma(`user_version = ${SCHEMA_VERSION}`)
+}
+
+/**
+ * v1 → v2 back-fill: rewrite each row's sensitive columns as ciphertext. The
+ * per-value conversion is idempotent (already-encrypted BLOBs decrypt then
+ * re-encrypt to the same plaintext), so a partially-migrated DB — e.g. an
+ * upgrade interrupted mid-way — finishes cleanly on the next launch. Runs in a
+ * single transaction for atomicity and speed. When OS encryption is
+ * unavailable the crypto helpers pass plaintext through, making this a safe
+ * no-op rather than a crash on those machines.
+ */
+function encryptExistingRows(db: Database.Database): void {
+  const rows = db.prepare('SELECT id, vendor, amount, email_body FROM invoices').all() as Array<{
+    id: number
+    vendor: unknown
+    amount: unknown
+    email_body: unknown
+  }>
+  if (rows.length === 0) return
+
+  const update = db.prepare(
+    'UPDATE invoices SET vendor = @vendor, amount = @amount, email_body = @emailBody WHERE id = @id'
+  )
+  const migrate = db.transaction((items: typeof rows) => {
+    for (const r of items) {
+      update.run({
+        id: r.id,
+        vendor: ensureEncryptedText(r.vendor),
+        amount: ensureEncryptedAmount(r.amount),
+        emailBody: ensureEncryptedText(r.email_body)
+      })
+    }
+  })
+  migrate(rows)
+  console.log(`[db] encrypted sensitive columns for ${rows.length} existing invoice row(s)`)
 }
 
 function getDb(): Database.Database {
@@ -136,9 +190,20 @@ function getDb(): Database.Database {
   return db
 }
 
-/** better-sqlite3 can't bind booleans — map `generated` to 0/1 for the run(). */
-function toBindParams(invoice: NewInvoice): Record<string, unknown> {
-  return { ...invoice, generated: invoice.generated ? 1 : 0 }
+/**
+ * Build the bound parameters for an insert: encrypt the sensitive columns
+ * (vendor, amount, email_body) at rest and map `generated` to 0/1 (better-
+ * sqlite3 can't bind booleans). Encrypted values bind as BLOBs; null and the
+ * plaintext fallback (no OS encryption) pass straight through.
+ */
+function toStorageParams(invoice: NewInvoice): Record<string, unknown> {
+  return {
+    ...invoice,
+    vendor: encryptText(invoice.vendor),
+    amount: encryptAmount(invoice.amount),
+    emailBody: encryptText(invoice.emailBody),
+    generated: invoice.generated ? 1 : 0
+  }
 }
 
 export function insertInvoice(invoice: NewInvoice): Invoice {
@@ -146,7 +211,7 @@ export function insertInvoice(invoice: NewInvoice): Invoice {
     INSERT INTO invoices (message_id, date, date_source, vendor, amount, currency, local_file_path, email_body, generated, status, engine_type)
     VALUES (@messageId, @date, @dateSource, @vendor, @amount, @currency, @localFilePath, @emailBody, @generated, @status, @engineType)
   `)
-  const info = stmt.run(toBindParams(invoice))
+  const info = stmt.run(toStorageParams(invoice))
   return getInvoiceById(Number(info.lastInsertRowid))!
 }
 
@@ -193,7 +258,7 @@ export function tryInsertInvoice(invoice: NewInvoice): boolean {
        VALUES (@messageId, @date, @dateSource, @vendor, @amount, @currency, @localFilePath, @emailBody, @generated, @status, @engineType)
        ON CONFLICT(local_file_path) DO NOTHING`
     )
-    .run(toBindParams(invoice))
+    .run(toStorageParams(invoice))
   return info.changes > 0
 }
 
