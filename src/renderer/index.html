@@ -3,10 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <title>Rony</title>
-    <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
+    <!--
+      Content-Security-Policy (https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP).
+      Enforced as a <meta> directive because it is cleanly scoped to THIS
+      document — a session-wide onHeadersReceived header would also hit the
+      offscreen PDF window (which loads a data: URL, see src/main/pdf/index.ts).
+      'unsafe-inline' is required for style only (Vue binds inline styles, e.g.
+      the scan progress bar); everything else is locked to 'self'. object/base/
+      form are pinned shut since the app uses none of them.
+    -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'"
     />
   </head>
 
