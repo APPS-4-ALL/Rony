@@ -253,12 +253,23 @@ function dedupeLinks(links: EmailLink[]): EmailLink[] {
   return [...byUrl.values()]
 }
 
-/** Convert Gmail's internalDate (epoch ms string) to an ISO date, or null. */
+/**
+ * Convert Gmail's internalDate (epoch ms string) to a YYYY-MM-DD date in the
+ * machine's LOCAL timezone, or null. We deliberately avoid toISOString() here:
+ * it formats in UTC, so an email received just after local midnight in any zone
+ * ahead of UTC (e.g. Israel, UTC+2/+3) rolls back to the previous calendar day —
+ * the date would render one day BEFORE what Gmail shows the user. Reading local
+ * date components keeps the date aligned with the user's calendar.
+ */
 function isoDateFromInternal(internalDate: string | undefined): string | null {
   if (!internalDate) return null
   const ms = Number(internalDate)
   if (!Number.isFinite(ms) || ms <= 0) return null
-  return new Date(ms).toISOString().slice(0, 10)
+  const d = new Date(ms)
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 /** Parse a raw Gmail message into the flat `ParsedEmail` shape. */

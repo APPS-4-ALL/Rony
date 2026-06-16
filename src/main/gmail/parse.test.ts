@@ -64,7 +64,9 @@ describe('parseMessage — body extraction', () => {
       id: 'm1',
       threadId: 't1',
       snippet: 'preview',
-      internalDate: String(Date.UTC(2026, 4, 20)), // 2026-05-20
+      // Local noon so the asserted date holds in any host timezone (the parser
+      // now formats in LOCAL time, not UTC — see isoDateFromInternal).
+      internalDate: String(new Date(2026, 4, 20, 12, 0, 0).getTime()), // 2026-05-20
       payload: {
         mimeType: 'text/plain',
         headers: [
