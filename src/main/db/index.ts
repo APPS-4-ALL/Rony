@@ -10,6 +10,7 @@ import {
   ensureEncryptedText,
   ensureEncryptedAmount
 } from './fieldCrypto'
+import { logger } from '../lib/log'
 
 let db: Database.Database | null = null
 
@@ -108,7 +109,9 @@ export function initDatabase(): Database.Database {
   // "Self-Test Vendor" row on every launch (now removed at insert time).
   db.exec(`DELETE FROM invoices WHERE message_id LIKE 'selftest-%'`)
 
-  console.log(`[db] SQLite ready at ${dbPath}`)
+  // Don't log the full dbPath — it contains the OS username. The location is
+  // deterministic (app.getPath('userData')), so a bare readiness line is enough.
+  logger.info('[db] SQLite ready')
   return db
 }
 
@@ -182,7 +185,7 @@ function encryptExistingRows(db: Database.Database): void {
     }
   })
   migrate(rows)
-  console.log(`[db] encrypted sensitive columns for ${rows.length} existing invoice row(s)`)
+  logger.info(`[db] encrypted sensitive columns for ${rows.length} existing invoice row(s)`)
 }
 
 function getDb(): Database.Database {
@@ -311,7 +314,7 @@ export function runStartupSelfTest(): void {
   })
   const readBack = getInvoiceById(inserted.id)
   deleteInvoice(inserted.id) // never pollute the real table
-  console.log(
+  logger.info(
     `[db] startup self-test: wrote+read+removed row #${inserted.id} (count back to ${before}), ` +
       `read back vendor="${readBack?.vendor}", amount=${readBack?.amount}`
   )
