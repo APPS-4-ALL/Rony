@@ -6,6 +6,7 @@ import { initDatabase, runStartupSelfTest } from './db'
 import { registerIpcHandlers } from './ipc'
 import { configureOcr, terminateOcr } from './download/ocr'
 import { warnIfWeakSecureStorage } from './auth/storageHealth'
+import { initAutoUpdate } from './update'
 
 function createWindow(): void {
   // Create the browser window.
@@ -95,6 +96,11 @@ app.whenReady().then(() => {
   registerIpcHandlers()
 
   createWindow()
+
+  // RONY-20: check GitHub Releases for a newer Rony and self-update. Production
+  // only — there's no updater target in a dev run, and the call is fully
+  // failure-tolerant so an offline launch is a silent no-op.
+  if (!is.dev) initAutoUpdate()
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the
