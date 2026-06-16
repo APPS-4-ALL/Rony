@@ -25,6 +25,10 @@ mac:
     - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
     - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
+  # Notarization is OFF until an Apple Developer ID cert is in place — keeping it
+  # false lets cert-less builds finish (unsigned) instead of failing. To enable:
+  # set `notarize: { teamId: <APPLE_TEAM_ID> }` and add the APPLE_* secrets the
+  # Build Installers workflow already passes. See docs/RELEASE.md.
   notarize: false
 dmg:
   artifactName: ${name}-${version}.${ext}

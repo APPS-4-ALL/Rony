@@ -1,0 +1,81 @@
+name: Build Installers
+
+# Build the Windows .exe and macOS .dmg installers.
+#   - Push a version tag (v1.0.0)  -> build AND publish to a GitHub Release, so
+#     the in-app auto-updater (RONY-20, src/main/update) can serve the update.
+#   - Manual run (workflow_dispatch) -> build only, uploaded as artifacts (no
+#     Release is touched), for a quick test build.
+#
+# PUBLISH NOTE: electron-builder creates the Release as a DRAFT by default. The
+# auto-updater ignores drafts, so after a tagged run you publish the draft from
+# the GitHub Releases page to actually roll the update out. See docs/RELEASE.md.
+#
+# CODE SIGNING (scaffolded — activates automatically once you add the secrets):
+#   The signing credentials below are read from repository secrets. While those
+#   secrets are EMPTY, electron-builder simply produces UNSIGNED installers (a
+#   warning, not a failure), so this workflow works today. The day you add the
+#   certs as secrets (see docs/RELEASE.md), the same builds become signed — no
+#   workflow change needed. macOS NOTARIZATION additionally needs a one-line flip
+#   in electron-builder.yml (`notarize`), also documented in docs/RELEASE.md.
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    # contents: write lets electron-builder create/upload the GitHub Release on
+    # tagged runs. Harmless on manual runs (we pass --publish never there).
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows
+            script: build:win
+            artifact: dist/*-setup.exe
+          - os: macos-latest
+            name: macos
+            script: build:mac
+            artifact: dist/*.dmg
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+
+      # Full install (runs postinstall = electron-builder install-app-deps),
+      # which rebuilds the native better-sqlite3 module for this OS.
+      - name: Install dependencies
+        run: npm ci
+
+      # Publish only on a tag push; a manual run just builds (--publish never).
+      # The flag is appended to the npm script, so it reaches electron-builder.
+      - name: Build installer
+        run: npm run ${{ matrix.script }} -- --publish ${{ github.ref_type == 'tag' && 'always' || 'never' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # --- Code-signing certificate (.p12/.pfx, base64-encoded) + password ---
+          # Per-OS so Windows and macOS can use different certs. Empty == unsigned.
+          CSC_LINK: ${{ matrix.name == 'windows' && secrets.WIN_CSC_LINK || secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ matrix.name == 'windows' && secrets.WIN_CSC_KEY_PASSWORD || secrets.MAC_CSC_KEY_PASSWORD }}
+          # --- Apple notarization (macOS only; ignored on Windows) ---
+          # Used once electron-builder.yml has `notarize` enabled. Empty == skipped.
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: rony-${{ matrix.name }}
+          path: ${{ matrix.artifact }}
+          if-no-files-found: error
