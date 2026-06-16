@@ -24,6 +24,7 @@ import type { AiAttachment } from '../engines/ai/types'
 import { pickInvoiceAttachment, visionMimeType } from '../engines/ai/attachments'
 import { getProviderConfig } from '../engines/ai/config'
 import { getSettings, updateSettings } from '../settings'
+import { maybePingInstall } from '../install'
 import { clearApiKey, getApiKey, hasApiKey, setApiKey } from '../settings/apiKeyStore'
 import { isAiProvider } from '../settings/validate'
 
@@ -162,10 +163,13 @@ export function registerIpcHandlers(): void {
 
   // --- Settings (REAL — RONY-12, persisted in SQLite) ---
   ipcMain.handle(IpcChannels.settingsGet, (): Settings => getSettings())
-  ipcMain.handle(
-    IpcChannels.settingsSet,
-    (_e, patch: Partial<Settings>): Settings => updateSettings(patch)
-  )
+  ipcMain.handle(IpcChannels.settingsSet, (_e, patch: Partial<Settings>): Settings => {
+    const next = updateSettings(patch)
+    // RONY-20: enabling install consent fires the one-time anonymous ping right
+    // away, so the user doesn't have to restart for the install to be counted.
+    if (patch.installConsent === true) void maybePingInstall()
+    return next
+  })
 
   // --- API keys (REAL — RONY-16, encrypted via safeStorage; renderer is write-only) ---
   ipcMain.handle(IpcChannels.settingsSetApiKey, (_e, provider: AiProvider, key: string): void => {

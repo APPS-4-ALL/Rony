@@ -16,6 +16,9 @@ export const DEFAULT_SETTINGS: Settings = {
   aiConsent: false,
   // RONY-18: following invoice links makes outbound requests to vendor sites — OFF by default.
   followLinks: false,
+  // RONY-20: reporting an anonymous install count is OPT-IN — nothing leaves the
+  // machine until the user accepts it.
+  installConsent: false,
   // UI theme — dark by default (Rony's original look).
   theme: 'dark'
 }
@@ -63,6 +66,15 @@ export function coerceAiConsent(value: unknown): boolean {
  * defaults to "don't follow links" (no surprise outbound requests).
  */
 export function coerceFollowLinks(value: unknown): boolean {
+  return value === true || value === '1'
+}
+
+/**
+ * Coerce a raw/stored install-consent value to a strict boolean (RONY-20).
+ * Stored as '1'/'0'; anything else reads as `false`, so a missing/corrupt entry
+ * safely defaults to "don't report" (no surprise outbound ping).
+ */
+export function coerceInstallConsent(value: unknown): boolean {
   return value === true || value === '1'
 }
 

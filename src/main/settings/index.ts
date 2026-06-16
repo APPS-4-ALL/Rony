@@ -13,6 +13,7 @@ import {
   coerceDefaultEngine,
   coerceDownloadDir,
   coerceFollowLinks,
+  coerceInstallConsent,
   coerceTheme
 } from './validate'
 
@@ -21,6 +22,7 @@ const KEY_AI_PROVIDER = 'aiProvider'
 const KEY_DOWNLOAD_DIR = 'downloadDir'
 const KEY_AI_CONSENT = 'aiConsent'
 const KEY_FOLLOW_LINKS = 'followLinks'
+const KEY_INSTALL_CONSENT = 'installConsent'
 const KEY_THEME = 'theme'
 
 /** Read the current settings, applying defaults for anything unset/invalid. */
@@ -31,6 +33,7 @@ export function getSettings(): Settings {
     downloadDir: coerceDownloadDir(getSetting(KEY_DOWNLOAD_DIR)),
     aiConsent: coerceAiConsent(getSetting(KEY_AI_CONSENT)),
     followLinks: coerceFollowLinks(getSetting(KEY_FOLLOW_LINKS)),
+    installConsent: coerceInstallConsent(getSetting(KEY_INSTALL_CONSENT)),
     theme: coerceTheme(getSetting(KEY_THEME))
   }
 }
@@ -53,6 +56,9 @@ export function updateSettings(patch: Partial<Settings>): Settings {
   }
   if (patch.followLinks !== undefined) {
     setSetting(KEY_FOLLOW_LINKS, coerceFollowLinks(patch.followLinks) ? '1' : '0')
+  }
+  if (patch.installConsent !== undefined) {
+    setSetting(KEY_INSTALL_CONSENT, coerceInstallConsent(patch.installConsent) ? '1' : '0')
   }
   if (patch.theme !== undefined) {
     setSetting(KEY_THEME, coerceTheme(patch.theme))

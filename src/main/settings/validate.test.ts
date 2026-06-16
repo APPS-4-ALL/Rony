@@ -5,6 +5,7 @@ import {
   coerceDefaultEngine,
   coerceDownloadDir,
   coerceFollowLinks,
+  coerceInstallConsent,
   coerceTheme,
   DEFAULT_SETTINGS,
   isAiProvider,
@@ -71,6 +72,15 @@ describe('settings validation', () => {
     expect(coerceFollowLinks('0')).toBe(false)
     expect(coerceFollowLinks(undefined)).toBe(false)
     expect(coerceFollowLinks(null)).toBe(false)
+  })
+
+  it('defaults install-consent to false and only accepts true/"1" (RONY-20, opt-in)', () => {
+    expect(DEFAULT_SETTINGS.installConsent).toBe(false)
+    expect(coerceInstallConsent('1')).toBe(true)
+    expect(coerceInstallConsent(true)).toBe(true)
+    expect(coerceInstallConsent('0')).toBe(false)
+    expect(coerceInstallConsent(undefined)).toBe(false)
+    expect(coerceInstallConsent(null)).toBe(false)
   })
 
   it('defaults theme to dark and coerces invalid values', () => {

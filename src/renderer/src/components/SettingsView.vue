@@ -16,6 +16,7 @@ const settings = ref<Settings>({
   downloadDir: null,
   aiConsent: false,
   followLinks: false,
+  installConsent: false,
   theme: 'dark'
 })
 const busy = ref(false)
@@ -147,6 +148,14 @@ const toggleFollowLinks = (): Promise<void> =>
     settings.value = await window.api.settings.set({ followLinks: !settings.value.followLinks })
   })
 
+/** RONY-20: toggle the opt-in "count my install" setting (anonymous ping). */
+const toggleInstallConsent = (): Promise<void> =>
+  guarded(async () => {
+    settings.value = await window.api.settings.set({
+      installConsent: !settings.value.installConsent
+    })
+  })
+
 const saveApiKey = (): Promise<void> =>
   guarded(async () => {
     const key = apiKeyInput.value.trim()
@@ -239,6 +248,41 @@ onMounted(() => guarded(load))
           איפוס לברירת מחדל
         </button>
       </div>
+    </section>
+
+    <!-- Anonymous install count (RONY-20) — opt-in -->
+    <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
+      <div class="flex flex-wrap items-start justify-between gap-4">
+        <div class="max-w-xl">
+          <h2 class="text-lg font-semibold">אני מאשר שידעו שהתקנתי את רוני</h2>
+          <p class="mt-1 text-sm text-slate-400">
+            כשהאפשרות פעילה, רוני שולח פעם אחת דיווח אנונימי שהאפליקציה הותקנה, כדי שנוכל לספור כמה
+            אנשים מתקינים את רוני.
+            <span class="text-slate-300">
+              לא נשלח שום מידע אישי — לא חשבוניות, לא מיילים ולא פרטים. רק מזהה אקראי, גרסת
+              האפליקציה וסוג מערכת ההפעלה.
+            </span>
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          dir="ltr"
+          :aria-checked="settings.installConsent"
+          class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition disabled:opacity-50"
+          :class="settings.installConsent ? 'bg-emerald-500' : 'bg-slate-700'"
+          :disabled="busy"
+          @click="toggleInstallConsent"
+        >
+          <span
+            class="inline-block h-4 w-4 transform rounded-full bg-white transition"
+            :class="settings.installConsent ? 'translate-x-6' : 'translate-x-1'"
+          />
+        </button>
+      </div>
+      <p class="mt-3 text-xs text-slate-500">
+        כבוי כברירת מחדל. אפשר לכבות בכל עת — רוני נשאר מקומי וללא מעקב.
+      </p>
     </section>
 
     <!-- Follow invoice download links (RONY-18) — opt-in -->
