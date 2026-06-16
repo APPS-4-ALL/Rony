@@ -58,25 +58,46 @@ jobs:
         run: npm ci
 
       # Publish only on a tag push; a manual run just builds (--publish never).
-      # The flag is appended to the npm script, so it reaches electron-builder.
+      #
+      # Code signing is OPT-IN via secrets. We export CSC_LINK/CSC_KEY_PASSWORD
+      # ONLY when a certificate is actually configured: an EMPTY CSC_LINK makes
+      # electron-builder take the "sign with this cert file" path, resolve the
+      # empty path to the project directory, and fail with "⨯ … not a file".
+      # So a cert-less run must leave CSC_LINK UNSET and instead disable keychain
+      # discovery, producing a clean UNSIGNED build. `shell: bash` so the one
+      # script runs identically on the Windows and macOS runners.
       - name: Build installer
-        run: npm run ${{ matrix.script }} -- --publish ${{ github.ref_type == 'tag' && 'always' || 'never' }}
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # --- Code-signing certificate (.p12/.pfx, base64-encoded) + password ---
-          # Per-OS so Windows and macOS can use different certs. Empty == unsigned.
-          CSC_LINK: ${{ matrix.name == 'windows' && secrets.WIN_CSC_LINK || secrets.MAC_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ matrix.name == 'windows' && secrets.WIN_CSC_KEY_PASSWORD || secrets.MAC_CSC_KEY_PASSWORD }}
-          # Without a cert, stop electron-builder from hunting the macOS keychain
-          # for a signing identity (none exists on the runner) and FAILING the
-          # build. This makes a cert-less macOS build finish UNSIGNED. When a real
-          # CSC_LINK is supplied, signing still works — it doesn't use discovery.
-          CSC_IDENTITY_AUTO_DISCOVERY: false
-          # --- Apple notarization (macOS only; ignored on Windows) ---
-          # Used once electron-builder.yml has `notarize` enabled. Empty == skipped.
+          PUBLISH: ${{ github.ref_type == 'tag' && 'always' || 'never' }}
+          # Per-OS certificates (base64 .p12/.pfx + password). May be empty.
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          # Apple notarization (macOS only; used once electron-builder.yml
+          # enables `notarize`). Empty == skipped.
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ "${{ matrix.name }}" = "windows" ]; then
+            CERT="$WIN_CSC_LINK"; CERT_PW="$WIN_CSC_KEY_PASSWORD"
+          else
+            CERT="$MAC_CSC_LINK"; CERT_PW="$MAC_CSC_KEY_PASSWORD"
+          fi
+          if [ -n "$CERT" ]; then
+            export CSC_LINK="$CERT"
+            export CSC_KEY_PASSWORD="$CERT_PW"
+            echo "Code signing: enabled (certificate provided)"
+          else
+            # No cert: never set CSC_LINK (empty breaks electron-builder), and
+            # stop the macOS keychain identity hunt so the build stays unsigned.
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+            echo "Code signing: disabled (no certificate secret) — unsigned build"
+          fi
+          npm run ${{ matrix.script }} -- --publish "$PUBLISH"
 
       - name: Upload installer
         uses: actions/upload-artifact@v4
