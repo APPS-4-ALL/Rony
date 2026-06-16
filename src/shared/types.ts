@@ -97,6 +97,14 @@ export interface Settings {
    * third-party URLs an email points at. Off → only attached/body invoices.
    */
   followLinks: boolean
+  /**
+   * RONY-20 opt-in: allow Rony to report a single anonymous "this copy was
+   * installed" ping to apps4all, so installs can be counted on the website
+   * panel. Defaults to `false`. NO invoice data, email, or personal info is ever
+   * sent — only a random install id, the app version, and the OS platform. Off →
+   * nothing leaves the machine (local-first default).
+   */
+  installConsent: boolean
   /** UI colour theme — 'dark' (default) or 'light'. */
   theme: Theme
 }

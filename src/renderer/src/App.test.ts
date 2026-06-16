@@ -13,6 +13,7 @@ const DEFAULT_SETTINGS = {
   downloadDir: null,
   aiConsent: false,
   followLinks: false,
+  installConsent: false,
   theme: 'dark'
 }
 

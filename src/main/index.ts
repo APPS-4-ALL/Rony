@@ -7,6 +7,7 @@ import { registerIpcHandlers } from './ipc'
 import { configureOcr, terminateOcr } from './download/ocr'
 import { warnIfWeakSecureStorage } from './auth/storageHealth'
 import { initAutoUpdate } from './update'
+import { maybePingInstall } from './install'
 
 function createWindow(): void {
   // Create the browser window.
@@ -101,6 +102,10 @@ app.whenReady().then(() => {
   // only — there's no updater target in a dev run, and the call is fully
   // failure-tolerant so an offline launch is a silent no-op.
   if (!is.dev) initAutoUpdate()
+
+  // RONY-20: report the one-time anonymous install ping (counts on the apps4all
+  // panel). Self-gating: a no-op unless the user opted in AND a secret is set.
+  void maybePingInstall()
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the
