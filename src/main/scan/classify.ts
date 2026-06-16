@@ -13,6 +13,7 @@ import type { ParsedEmail } from '../gmail/parse'
 import type { AiResult } from '../engines/ai/types'
 import type { ApprovedEmail } from '../download/core'
 import type { EngineType } from '../../shared/types'
+import { logger, maskId } from '../lib/log'
 
 export interface Classifiers {
   /** RONY-9: true when the email looks like an invoice/receipt. */
@@ -93,7 +94,7 @@ async function selectWithAi(
       } catch (e) {
         errors++
         if (!firstError) firstError = e instanceof Error ? e.message : String(e)
-        console.error(`[scan] AI classification failed for ${email.id}:`, e)
+        logger.error(`[scan] AI classification failed for ${maskId(email.id)}:`, e)
       }
       onProgress?.(++processed, emails.length, approved.length)
     }

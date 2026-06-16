@@ -12,6 +12,7 @@
  * decision is explicit, not silent). Pure-ish: only touches Electron `safeStorage`.
  */
 import { safeStorage } from 'electron'
+import { logger } from '../lib/log'
 
 export interface SecureStorageStatus {
   /** Whether `safeStorage` will encrypt at all. */
@@ -46,12 +47,12 @@ export function getSecureStorageStatus(): SecureStorageStatus {
 export function warnIfWeakSecureStorage(): SecureStorageStatus {
   const status = getSecureStorageStatus()
   if (!status.available) {
-    console.warn(
+    logger.warn(
       '[security] OS secure storage is UNAVAILABLE — login and API keys cannot be ' +
         'stored safely on this system.'
     )
   } else if (!status.strong) {
-    console.warn(
+    logger.warn(
       `[security] secure storage is using the weak "${status.backend}" backend ` +
         '(no OS keyring found). Tokens/API keys are NOT strongly protected at rest. ' +
         'Install a keyring (e.g. gnome-keyring / libsecret) for full protection.'

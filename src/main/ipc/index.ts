@@ -17,6 +17,7 @@ import { toDeterministicInput } from '../gmail/parse'
 import { classifyDeterministic } from '../../shared/engines/deterministic'
 import { downloadAndRecord, getEffectiveInvoicesDir, getInvoicesDir } from '../download'
 import { isPathInsideDir } from '../lib/pathSafety'
+import { logger, maskFile, maskId } from '../lib/log'
 import { selectApproved } from '../scan/classify'
 import { classifyWithAI } from '../engines/ai'
 import type { AiAttachment } from '../engines/ai/types'
@@ -56,8 +57,8 @@ export function registerIpcHandlers(): void {
     // saved before the folder was changed still resolve under the default).
     const allowedDirs = [getEffectiveInvoicesDir(), getInvoicesDir()]
     if (!allowedDirs.some((dir) => isPathInsideDir(dir, invoice.localFilePath!))) {
-      console.error(
-        `[security] refused to open out-of-bounds path for invoice ${invoiceId}: ${invoice.localFilePath}`
+      logger.error(
+        `[security] refused to open out-of-bounds path for invoice ${invoiceId}: ${maskFile(invoice.localFilePath)}`
       )
       return 'הקובץ נמצא מחוץ לתיקיית החשבוניות — הפתיחה נחסמה.'
     }
@@ -93,7 +94,7 @@ export function registerIpcHandlers(): void {
           // Anything but "already gone" means we could NOT remove the file →
           // keep the row so file + DB stay consistent, and tell the user why.
           if (code !== 'ENOENT') {
-            console.error(`[delete] failed to remove file for invoice ${invoiceId}:`, e)
+            logger.error(`[delete] failed to remove file for invoice ${invoiceId}:`, e)
             if (code === 'EBUSY' || code === 'EPERM') {
               return 'לא ניתן למחוק — הקובץ כנראה פתוח בתוכנה אחרת. סגור/י אותו ונסה/י שוב.'
             }
@@ -101,8 +102,8 @@ export function registerIpcHandlers(): void {
           }
         }
       } else {
-        console.error(
-          `[security] refused to delete out-of-bounds file for invoice ${invoiceId}: ${invoice.localFilePath}`
+        logger.error(
+          `[security] refused to delete out-of-bounds file for invoice ${invoiceId}: ${maskFile(invoice.localFilePath)}`
         )
       }
     }
@@ -133,14 +134,14 @@ export function registerIpcHandlers(): void {
             // "Already gone" is fine; anything else (usually a locked/open file)
             // means we keep the row so we never orphan a file we still track.
             if ((e as NodeJS.ErrnoException).code !== 'ENOENT') {
-              console.error(`[delete] failed to remove file for invoice ${invoice.id}:`, e)
+              logger.error(`[delete] failed to remove file for invoice ${invoice.id}:`, e)
               kept++
               continue
             }
           }
         } else {
-          console.error(
-            `[security] refused to delete out-of-bounds file for invoice ${invoice.id}: ${invoice.localFilePath}`
+          logger.error(
+            `[security] refused to delete out-of-bounds file for invoice ${invoice.id}: ${maskFile(invoice.localFilePath)}`
           )
         }
       }
@@ -263,8 +264,8 @@ export function registerIpcHandlers(): void {
         // (huge base64 body, slow upload, large token bill). Fall back to the
         // text-only result instead.
         if (data.length > MAX_PARSE_BYTES) {
-          console.warn(
-            `[scan] skipping vision attachment for ${email.id}: ` +
+          logger.warn(
+            `[scan] skipping vision attachment for ${maskId(email.id)}: ` +
               `${data.length} bytes exceeds ${MAX_PARSE_BYTES}-byte cap`
           )
           return undefined
@@ -273,7 +274,10 @@ export function registerIpcHandlers(): void {
         const mimeType = visionMimeType(chosen) ?? chosen.mimeType
         return [{ filename: chosen.filename, mimeType, data }]
       } catch (e) {
-        console.error(`[scan] vision attachment fetch failed for ${email.id} (text-only):`, e)
+        logger.error(
+          `[scan] vision attachment fetch failed for ${maskId(email.id)} (text-only):`,
+          e
+        )
         return undefined
       }
     }
