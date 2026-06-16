@@ -483,6 +483,36 @@ describe('downloadApproved — RONY-11 DoD', () => {
     expect(summary.downloaded).toBe(0)
   })
 
+  it('does NOT record a body-only receipt when the AI extracted no amount (false positive)', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    const renderEmailPdf = vi.fn(async () => Buffer.from('%PDF-1.4 fake'))
+    // A "Re: tax invoice #19460" reply: invoice-shaped SUBJECT pulled it into the
+    // scan and the AI judged it financial, but the body is a one-line chat reply
+    // and no amount was extracted. We must not turn it into a generated receipt.
+    const approved = [
+      approvedEmail(
+        [],
+        {
+          engineType: 'ai',
+          extracted: { vendor: 'שרותי ייעוץ בע"מ', amount: null, currency: null, date: null }
+        },
+        "I'll send spreadsheet of the breakdown today"
+      )
+    ]
+
+    const summary = await downloadApproved(approved, {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      renderEmailPdf,
+      store
+    })
+
+    expect(renderEmailPdf).not.toHaveBeenCalled()
+    expect(store.rows).toHaveLength(0)
+    expect(summary).toMatchObject({ downloaded: 0, rejected: 1 })
+  })
+
   it('counts a failed download without aborting the rest', async () => {
     const targetDir = tempDir()
     const store = fakeStore()
@@ -742,6 +772,33 @@ describe('downloadApproved — RONY-18 link-based download', () => {
 
     expect(summary.downloaded).toBe(0)
     expect(store.rows).toHaveLength(0)
+  })
+
+  it('does NOT fabricate a body-only PDF when an invoice link could not be fetched', async () => {
+    const targetDir = tempDir()
+    const store = fakeStore()
+    const renderEmailPdf = vi.fn(async () => Buffer.from('%PDF-1.4 fake'))
+    // The AI judged it financial AND extracted an amount (so the amount guard
+    // would pass) — but the real invoice is behind a link the fetcher can't
+    // retrieve (e.g. a login-gated account page → null). The right outcome is to
+    // record NOTHING, not a generated PDF of the "here's your invoice" body text.
+    const email = linkEmail(
+      [{ url: 'https://vendor.co/account/invoice', text: 'here is the invoice' }],
+      'ai'
+    )
+    email.extracted = { vendor: 'Three.js Journey', amount: 50, currency: 'EUR', date: null }
+
+    const summary = await downloadApproved([email], {
+      targetDir,
+      fetchAttachment: fakeFetch(),
+      fetchLinkDocument: async () => null, // fetch failed / login-gated → no document
+      renderEmailPdf,
+      store
+    })
+
+    expect(renderEmailPdf).not.toHaveBeenCalled()
+    expect(store.rows).toHaveLength(0)
+    expect(summary.downloaded).toBe(0)
   })
 
   it('runs RONY-17 validation on a link-downloaded document (rejects junk)', async () => {

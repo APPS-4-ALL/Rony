@@ -31,6 +31,20 @@ export interface ExtractedFields {
   date?: string | null
 }
 
+/**
+ * A body-only email is only worth turning into a generated receipt when the AI
+ * actually pulled a monetary AMOUNT out of it. A financial-looking SUBJECT alone
+ * — e.g. a "Re: tax invoice #19460" reply whose body is just "I'll send the
+ * breakdown today" — is a false positive: no attachment, no amount, nothing to
+ * put in a receipt PDF but a one-line chat message. Gating on an extracted
+ * amount keeps those conversational replies out of the results. (0 is a valid
+ * amount — a genuinely free/zero receipt — so we test for a finite number, not
+ * truthiness.)
+ */
+function hasExtractedAmount(extracted: ExtractedFields | undefined): boolean {
+  return typeof extracted?.amount === 'number' && Number.isFinite(extracted.amount)
+}
+
 /** One email an engine flagged as an invoice/receipt, to be downloaded. */
 export interface ApprovedEmail {
   email: ParsedEmail
@@ -125,9 +139,12 @@ export interface DownloadSummary {
   /** Skipped: already present (file on disk + row), or out of scope, or lost a race. */
   skipped: number
   /**
-   * RONY-17: fetched files that FAILED document validation (an HTML error page,
-   * a truncated/empty download, or a mistyped binary) and so were NOT recorded.
-   * Distinct from `errors` — these aren't failures, they're deliberately filtered.
+   * Records we deliberately did NOT keep — distinct from `errors`: these aren't
+   * failures, they're filtered on purpose. Two sources:
+   *   - RONY-17: a fetched file that FAILED document validation (an HTML error
+   *     page, a truncated/empty download, or a mistyped binary); and
+   *   - a body-only email the AI approved on financial-looking text but with no
+   *     extracted amount (a reply/forward in an invoice thread, not an invoice).
    */
   rejected: number
   /** Per-attachment failures (non-fatal — the run continues). */
@@ -551,11 +568,21 @@ export async function downloadApproved(
   // coarse keyword match with no extracted fields, so a body-only match there
   // would produce a near-empty row (no vendor/amount) from possibly-incidental
   // keywords (e.g. "קבלה" also means "reception"). We therefore record body-only
-  // receipts only when the AI judged the email financial.
+  // receipts only when the AI judged the email financial AND extracted an amount
+  // (see {@link hasExtractedAmount}, applied per-email below) — an invoice-shaped
+  // subject with no amount is usually a reply in an invoice thread, not a receipt.
+  //
+  // We also EXCLUDE any email that carried an invoice LINK: its real document
+  // lives behind that link, so if the RONY-18 link path didn't produce a file
+  // (link-following off, fetch failed, or the page was login-gated) the right
+  // outcome is to record nothing — not to fabricate a PDF from the surrounding
+  // "here's your invoice" body text. `linkRecorded` already covers the success
+  // case; this covers the failure case.
   const bodyOnly = approved.filter(
     ({ email, engineType }) =>
       engineType === 'ai' &&
       !linkRecorded.has(email.id) && // RONY-18: a link already produced the file
+      selectInvoiceLinks(email.links).length === 0 && // its invoice is behind a link we couldn't fetch
       !email.attachments.some((a) => a.attachmentId && isInScope(a))
   )
   await runWithConcurrency(
@@ -564,6 +591,17 @@ export async function downloadApproved(
     async ({ email, engineType, extracted }) => {
       if (deps.store.existsByMessageId(email.id)) {
         summary.skipped++
+        return
+      }
+
+      // FALSE-POSITIVE GUARD: the AI approved this email on financial-looking
+      // text but pulled no amount out of it — almost always a reply/forward
+      // inside an invoice thread (e.g. a one-line "I'll send the breakdown
+      // today"), not the invoice itself. Don't manufacture a receipt PDF or a
+      // file-less row for it; count it as deliberately filtered.
+      if (!hasExtractedAmount(extracted)) {
+        summary.rejected++
+        logger.info(`[pdf] body-only skipped for ${maskId(email.id)} (no amount extracted)`)
         return
       }
 
