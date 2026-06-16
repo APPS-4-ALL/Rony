@@ -1,7 +1,14 @@
 name: Build Installers
 
 # Build the Windows .exe and macOS .dmg installers.
-# Runs on demand, and automatically when you push a version tag like v1.0.0.
+#   - Push a version tag (v1.0.0)  -> build AND publish to a GitHub Release, so
+#     the in-app auto-updater (RONY-20, src/main/update) can serve the update.
+#   - Manual run (workflow_dispatch) -> build only, uploaded as artifacts (no
+#     Release is touched), for a quick test build.
+#
+# PUBLISH NOTE: electron-builder creates the Release as a DRAFT by default. The
+# auto-updater ignores drafts, so after a tagged run you publish the draft from
+# the GitHub Releases page to actually roll the update out. See docs/RELEASE.md.
 #
 # CODE SIGNING (scaffolded — activates automatically once you add the secrets):
 #   The signing credentials below are read from repository secrets. While those
@@ -18,17 +25,21 @@ on:
 
 jobs:
   build:
+    # contents: write lets electron-builder create/upload the GitHub Release on
+    # tagged runs. Harmless on manual runs (we pass --publish never there).
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: windows-latest
             name: windows
-            build: npm run build:win -- --publish never
+            script: build:win
             artifact: dist/*-setup.exe
           - os: macos-latest
             name: macos
-            build: npm run build:mac -- --publish never
+            script: build:mac
             artifact: dist/*.dmg
 
     runs-on: ${{ matrix.os }}
@@ -46,8 +57,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Publish only on a tag push; a manual run just builds (--publish never).
+      # The flag is appended to the npm script, so it reaches electron-builder.
       - name: Build installer
-        run: ${{ matrix.build }}
+        run: npm run ${{ matrix.script }} -- --publish ${{ github.ref_type == 'tag' && 'always' || 'never' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # --- Code-signing certificate (.p12/.pfx, base64-encoded) + password ---

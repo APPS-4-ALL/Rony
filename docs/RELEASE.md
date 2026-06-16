@@ -1,22 +1,24 @@
 # Releasing Rony — installers, signing & auto-update
 
-This covers how the desktop installers are built, how to turn on code signing
-(and macOS notarization), and the plan for auto-update.
+This covers how the desktop installers are built and published, how to turn on
+code signing (and macOS notarization), and how the in-app auto-update flow works.
 
 ## 1. Building the installers
 
 The **Build Installers** workflow (`.github/workflows/build-installers.yml`)
 produces the Windows `.exe` and macOS `.dmg`. It runs:
 
-- **on demand** — Actions tab → _Build Installers_ → _Run workflow_, or
-- **automatically** when you push a version tag, e.g.:
+- **on demand** — Actions tab → _Build Installers_ → _Run workflow_ — builds
+  only, uploaded as **artifacts** (`rony-windows`, `rony-macos`); no Release is
+  touched; or
+- **on a version tag** — builds **and publishes** to a GitHub Release for the
+  auto-updater (see §3):
 
   ```bash
   git tag v1.0.0
   git push origin v1.0.0
   ```
 
-Each run uploads the installers as **artifacts** (`rony-windows`, `rony-macos`).
 Windows builds on `windows-latest`, macOS on `macos-latest`, because
 `better-sqlite3` is a native module that must be rebuilt per-OS.
 
@@ -81,13 +83,15 @@ mac:
 electron-builder reads the `APPLE_*` env vars the workflow already passes and
 notarizes the signed app automatically.
 
-## 3. Auto-update (planned — depends on signing)
+## 3. Auto-update
 
-Auto-update is **intentionally not wired yet**, because it depends on signing:
-`electron-updater` verifies update signatures, and macOS will reject an unsigned
-update at the OS level. Wire it **after** signing is working.
+The **in-app updater is already shipped** (RONY-20, `src/main/update/index.ts`,
+wired from `src/main/index.ts`). On launch, a packaged build checks GitHub
+Releases via `electron-updater`, downloads a newer version in the background, and
+installs it on the next quit. It's production-only (`!is.dev`) and fully
+failure-tolerant (offline / GitHub down is a silent no-op).
 
-`electron-builder.yml` already publishes to GitHub Releases:
+The release channel is the `publish` block already in `electron-builder.yml`:
 
 ```yaml
 publish:
@@ -96,24 +100,39 @@ publish:
   repo: invoice-scanner-rony
 ```
 
-When ready:
+### How a release reaches users
 
-1. `npm i electron-updater`
-2. In the main process startup (`src/main/index.ts`), after the window is
-   created:
+```
+git tag v1.0.1 && git push origin v1.0.1
+        │
+        ▼
+Build Installers workflow runs with --publish always
+        │  uploads the .exe/.dmg AND the latest.yml / latest-mac.yml
+        │  update manifests to a GitHub Release (created as a DRAFT)
+        ▼
+You publish the draft Release on GitHub
+        │
+        ▼
+Installed apps see it on next launch and self-update
+```
 
-   ```ts
-   import { autoUpdater } from 'electron-updater'
-   // ...
-   autoUpdater.checkForUpdatesAndNotify()
-   ```
+- A **tag push** publishes; a **manual** _Run workflow_ only builds artifacts
+  (`--publish never`), so you can test-build without touching a Release.
+- electron-builder creates the Release as a **draft**, and the auto-updater
+  **ignores drafts** — so nothing rolls out until you click _Publish_ on the
+  draft. That's the intended human gate; review, then publish.
 
-3. Change the build steps from `--publish never` to publishing on tagged builds
-   (electron-builder uploads the installers **and** the `latest.yml` /
-   `latest-mac.yml` update manifests to the GitHub Release), and give the build
-   job `permissions: contents: write` so it can create the release.
-4. Tag a release (`git tag v1.0.1 && git push --tags`); installed apps pick it up
-   on next launch.
+### ⚠️ Signing is still required for this to work end-to-end
 
-> Until then, "updates" mean: build a new tag, download the artifact, install
-> manually.
+Auto-update depends on signing — especially on **macOS**, where Gatekeeper
+rejects an unsigned/un-notarized update, so the download installs but won't
+launch. Windows auto-update generally works unsigned (with SmartScreen
+friction). Until the certs from §2 are in place, treat macOS auto-update as
+**not yet functional**.
+
+### Local smoke test
+
+`dev-app-update.yml` mirrors the publish block so you can exercise the updater
+against a real Release from a locally-built, packaged app (not `npm run dev`,
+which is dev-gated). `npm run release` (build + `electron-builder --publish
+always`) publishes from a developer machine if you ever need to bypass CI.
