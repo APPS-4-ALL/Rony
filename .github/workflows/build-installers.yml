@@ -67,6 +67,11 @@ jobs:
           # Per-OS so Windows and macOS can use different certs. Empty == unsigned.
           CSC_LINK: ${{ matrix.name == 'windows' && secrets.WIN_CSC_LINK || secrets.MAC_CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ matrix.name == 'windows' && secrets.WIN_CSC_KEY_PASSWORD || secrets.MAC_CSC_KEY_PASSWORD }}
+          # Without a cert, stop electron-builder from hunting the macOS keychain
+          # for a signing identity (none exists on the runner) and FAILING the
+          # build. This makes a cert-less macOS build finish UNSIGNED. When a real
+          # CSC_LINK is supplied, signing still works — it doesn't use discovery.
+          CSC_IDENTITY_AUTO_DISCOVERY: false
           # --- Apple notarization (macOS only; ignored on Windows) ---
           # Used once electron-builder.yml has `notarize` enabled. Empty == skipped.
           APPLE_ID: ${{ secrets.APPLE_ID }}
