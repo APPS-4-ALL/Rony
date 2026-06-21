@@ -4,7 +4,8 @@
   "description": "Local-first desktop app to scan, download, and manage invoices and receipts from Gmail.",
   "main": "./out/main/index.js",
   "author": "apps4all",
-  "homepage": "https://github.com/shbh8205-lgtm/invoice-scanner-rony",
+  "license": "SEE LICENSE IN LICENSE",
+  "homepage": "https://github.com/APPS-4-ALL/Rony",
   "engines": {
     "node": ">=20.19.0"
   },

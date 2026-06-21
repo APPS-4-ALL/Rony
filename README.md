@@ -29,7 +29,7 @@ Rony connects to your **Gmail API**, automatically parses financial documents us
 
 ## Install
 
-Download the latest `.exe` installer from [GitHub Releases](https://github.com/shbh8205-lgtm/invoice-scanner-rony/releases) and run it.
+Download the latest `.exe` installer from [GitHub Releases](https://github.com/APPS-4-ALL/Rony/releases) and run it.
 
 > Windows SmartScreen will warn you — click "More info → Run anyway". The app is unsigned in MVP (see [disclaimer](#️-important-disclaimers)).
 
@@ -42,8 +42,8 @@ Download the latest `.exe` installer from [GitHub Releases](https://github.com/s
 **Requirements:** Node.js **≥20.19** (see [`.nvmrc`](.nvmrc) — 20.17 breaks the test runner), npm 9+ (or yarn/pnpm)
 
 ```bash
-git clone https://github.com/shbh8205-lgtm/invoice-scanner-rony.git
-cd invoice-scanner-rony
+git clone https://github.com/APPS-4-ALL/Rony.git
+cd Rony
 npm install
 npm run dev
 ```
@@ -91,4 +91,8 @@ Rony collects no telemetry. Your emails, credentials, token files, and downloade
 
 ## License
 
-MIT — free to use, audit, fork, and self-host.
+**MIT License + [Commons Clause](https://commonsclause.com/)** — © Elie e.b advisory and computing ltd.
+
+Free to use, audit, fork, modify, and self-host. The Commons Clause adds one
+restriction: you may **not sell** the Software (or a product/service whose value
+derives substantially from it). See [`LICENSE`](LICENSE) for the full terms.

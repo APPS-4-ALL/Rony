@@ -96,8 +96,8 @@ The release channel is the `publish` block already in `electron-builder.yml`:
 ```yaml
 publish:
   provider: github
-  owner: shbh8205-lgtm
-  repo: invoice-scanner-rony
+  owner: APPS-4-ALL
+  repo: Rony
 ```
 
 ### How a release reaches users
