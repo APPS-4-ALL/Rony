@@ -3,6 +3,7 @@ import { onMounted, onUnmounted, ref } from 'vue'
 import type { Invoice, ScanOptions, ScanProgress, ScanResult, Theme } from '@shared/types'
 import InvoicesTable from './components/InvoicesTable.vue'
 import SettingsView from './components/SettingsView.vue'
+import OnboardingView from './components/OnboardingView.vue'
 import {
   progressLabel,
   COUNT_OPTIONS,
@@ -15,6 +16,13 @@ import logoUrl from './assets/logo.png'
 
 type View = 'dashboard' | 'settings'
 const view = ref<View>('dashboard')
+
+// --- Onboarding ---
+const showOnboarding = ref(false)
+
+function onOnboardingDone(): void {
+  showOnboarding.value = false
+}
 
 // --- Theme (dark/light) ---
 const theme = ref<Theme>('dark')
@@ -35,12 +43,15 @@ async function toggleTheme(): Promise<void> {
   }
 }
 
-/** Load the saved theme on startup and apply it. */
+/** Load the saved theme on startup and apply it. Also checks if onboarding is needed. */
 async function loadTheme(): Promise<void> {
   try {
     const settings = await window.api.settings.get()
     theme.value = settings.theme
     applyTheme(settings.theme)
+    if (!settings.onboardingComplete) {
+      showOnboarding.value = true
+    }
   } catch (e) {
     console.error('Failed to load theme:', e)
   }
@@ -166,6 +177,7 @@ onUnmounted(() => {
 
 <template>
   <div class="min-h-full bg-slate-950 text-slate-100">
+    <OnboardingView v-if="showOnboarding" @done="onOnboardingDone" />
     <div class="mx-auto max-w-5xl px-6 py-10">
       <!-- Header -->
       <header class="mb-10">

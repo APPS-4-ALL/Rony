@@ -10,10 +10,13 @@ import type { Settings } from '../../shared/types'
 import {
   coerceAiConsent,
   coerceAiProvider,
+  coerceBusinessName,
   coerceDefaultEngine,
   coerceDownloadDir,
   coerceFollowLinks,
   coerceInstallConsent,
+  coerceOnboardingComplete,
+  coerceTaxId,
   coerceTheme
 } from './validate'
 
@@ -24,6 +27,10 @@ const KEY_AI_CONSENT = 'aiConsent'
 const KEY_FOLLOW_LINKS = 'followLinks'
 const KEY_INSTALL_CONSENT = 'installConsent'
 const KEY_THEME = 'theme'
+const KEY_BUSINESS_NAME_HE = 'businessNameHe'
+const KEY_BUSINESS_NAME_EN = 'businessNameEn'
+const KEY_TAX_ID = 'taxId'
+const KEY_ONBOARDING_COMPLETE = 'onboardingComplete'
 
 /** Read the current settings, applying defaults for anything unset/invalid. */
 export function getSettings(): Settings {
@@ -34,7 +41,11 @@ export function getSettings(): Settings {
     aiConsent: coerceAiConsent(getSetting(KEY_AI_CONSENT)),
     followLinks: coerceFollowLinks(getSetting(KEY_FOLLOW_LINKS)),
     installConsent: coerceInstallConsent(getSetting(KEY_INSTALL_CONSENT)),
-    theme: coerceTheme(getSetting(KEY_THEME))
+    theme: coerceTheme(getSetting(KEY_THEME)),
+    businessNameHe: coerceBusinessName(getSetting(KEY_BUSINESS_NAME_HE)),
+    businessNameEn: coerceBusinessName(getSetting(KEY_BUSINESS_NAME_EN)),
+    taxId: coerceTaxId(getSetting(KEY_TAX_ID)),
+    onboardingComplete: coerceOnboardingComplete(getSetting(KEY_ONBOARDING_COMPLETE))
   }
 }
 
@@ -62,6 +73,18 @@ export function updateSettings(patch: Partial<Settings>): Settings {
   }
   if (patch.theme !== undefined) {
     setSetting(KEY_THEME, coerceTheme(patch.theme))
+  }
+  if (patch.businessNameHe !== undefined) {
+    setSetting(KEY_BUSINESS_NAME_HE, coerceBusinessName(patch.businessNameHe) ?? '')
+  }
+  if (patch.businessNameEn !== undefined) {
+    setSetting(KEY_BUSINESS_NAME_EN, coerceBusinessName(patch.businessNameEn) ?? '')
+  }
+  if (patch.taxId !== undefined) {
+    setSetting(KEY_TAX_ID, coerceTaxId(patch.taxId) ?? '')
+  }
+  if (patch.onboardingComplete !== undefined) {
+    setSetting(KEY_ONBOARDING_COMPLETE, coerceOnboardingComplete(patch.onboardingComplete) ? '1' : '0')
   }
   return getSettings()
 }

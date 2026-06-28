@@ -107,6 +107,14 @@ export interface Settings {
   installConsent: boolean
   /** UI colour theme — 'dark' (default) or 'light'. */
   theme: Theme
+  /** Business name in Hebrew, entered during onboarding. */
+  businessNameHe: string | null
+  /** Business name in English, entered during onboarding (optional). */
+  businessNameEn: string | null
+  /** Business tax ID (ח.פ) or personal ID (ת"ז), entered during onboarding (optional). */
+  taxId: string | null
+  /** True once the user has completed the first-run onboarding wizard. */
+  onboardingComplete: boolean
 }
 
 /**

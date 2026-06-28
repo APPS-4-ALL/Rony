@@ -20,7 +20,11 @@ export const DEFAULT_SETTINGS: Settings = {
   // machine until the user accepts it.
   installConsent: false,
   // UI theme — dark by default (Rony's original look).
-  theme: 'dark'
+  theme: 'dark',
+  businessNameHe: null,
+  businessNameEn: null,
+  taxId: null,
+  onboardingComplete: false
 }
 
 /** Type guard for the scan-engine union. */
@@ -86,4 +90,19 @@ export function isTheme(value: unknown): value is Theme {
 /** Coerce a raw/stored theme to a valid value, defaulting to dark. */
 export function coerceTheme(value: unknown): Theme {
   return isTheme(value) ? value : DEFAULT_SETTINGS.theme
+}
+
+/** Coerce a raw/stored business name (Hebrew or English) to a trimmed string or null. */
+export function coerceBusinessName(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() !== '' ? value.trim() : null
+}
+
+/** Coerce a raw/stored tax ID (ח.פ / ת"ז) to a trimmed string or null. */
+export function coerceTaxId(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() !== '' ? value.trim() : null
+}
+
+/** Coerce a raw/stored onboarding-complete flag. Stored as '1'/'0'. */
+export function coerceOnboardingComplete(value: unknown): boolean {
+  return value === true || value === '1'
 }

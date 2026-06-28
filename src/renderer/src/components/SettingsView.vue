@@ -17,10 +17,45 @@ const settings = ref<Settings>({
   aiConsent: false,
   followLinks: false,
   installConsent: false,
-  theme: 'dark'
+  theme: 'dark',
+  businessNameHe: null,
+  businessNameEn: null,
+  taxId: null,
+  onboardingComplete: false
 })
 const busy = ref(false)
 const error = ref('')
+
+// --- Delete account ---
+const showDeleteConfirm = ref(false)
+const deleting = ref(false)
+const deleteError = ref('')
+
+async function resetAccount(): Promise<void> {
+  deleting.value = true
+  deleteError.value = ''
+  try {
+    await window.api.invoices.deleteAll()
+    await window.api.auth.logout()
+    for (const provider of ['openai', 'gemini', 'claude', 'groq'] as const) {
+      await window.api.settings.clearApiKey(provider)
+    }
+    await window.api.settings.set({
+      onboardingComplete: false,
+      businessNameHe: null,
+      businessNameEn: null,
+      taxId: null,
+      aiConsent: false,
+      followLinks: false,
+      installConsent: false,
+      defaultEngine: 'deterministic'
+    })
+    window.location.reload()
+  } catch (e) {
+    deleteError.value = e instanceof Error ? e.message : String(e)
+    deleting.value = false
+  }
+}
 
 // Privacy consent dialog — shown when enabling the AI engine without prior opt-in.
 const consentPoints = AI_CONSENT_POINTS
@@ -433,6 +468,31 @@ onMounted(() => guarded(load))
       {{ error }}
     </p>
 
+    <!-- Danger zone -->
+    <section class="rounded-none border border-red-900/60 bg-red-950/10 p-6">
+      <h2 class="text-lg font-semibold text-red-300">אזור מסוכן</h2>
+      <p class="mt-1 text-sm text-slate-400">
+        פעולות בלתי הפיכות. קרא/י בעיון לפני שמבצע/ת.
+      </p>
+
+      <div class="mt-5 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p class="text-sm font-medium text-slate-200">מחיקת כל הנתונים והרישום</p>
+          <p class="mt-1 text-sm text-slate-500">
+            מוחק את כל החשבוניות, מנתק את Gmail, מוחק מפתחות API ומאפס את האפליקציה לגמרי.
+            בפתיחה הבאה תוצג מסך ההרשמה מחדש.
+          </p>
+        </div>
+        <button
+          class="shrink-0 border border-red-700 px-4 py-2 text-sm font-semibold text-red-300 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+          :disabled="busy || deleting"
+          @click="showDeleteConfirm = true"
+        >
+          מחק את כל הנתונים
+        </button>
+      </div>
+    </section>
+
     <!-- Consent dialog: shown when enabling the AI engine without prior opt-in.
          The AI engine cannot be selected (UI) nor run (main process) until the
          user accepts this. -->
@@ -466,6 +526,44 @@ onMounted(() => guarded(load))
             @click="confirmConsent"
           >
             אני מאשר/ת — הפעל סריקה חכמה
+          </button>
+        </div>
+      </div>
+    </div>
+    <!-- Delete account confirmation dialog -->
+    <div
+      v-if="showDeleteConfirm"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4"
+    >
+      <div class="w-full max-w-md rounded-none border border-red-700/60 bg-slate-900 p-6 shadow-2xl">
+        <h3 class="text-lg font-bold text-red-300">מחיקת כל הנתונים</h3>
+        <p class="mt-3 text-sm text-slate-300">פעולה זו תמחק לצמיתות:</p>
+        <ul class="mt-2 space-y-1.5 text-sm text-slate-400">
+          <li class="flex gap-2"><span class="text-red-400">•</span> את כל רשומות החשבוניות וקבצי ההורדה</li>
+          <li class="flex gap-2"><span class="text-red-400">•</span> את חיבור ה‑Gmail</li>
+          <li class="flex gap-2"><span class="text-red-400">•</span> את מפתחות ה‑API השמורים</li>
+          <li class="flex gap-2"><span class="text-red-400">•</span> את פרטי העסק וכל ההגדרות</li>
+        </ul>
+        <p class="mt-4 text-sm font-semibold text-red-300">לא ניתן לשחזר פעולה זו.</p>
+
+        <p v-if="deleteError" class="mt-3 bg-red-950/60 px-3 py-2 text-xs text-red-300">
+          {{ deleteError }}
+        </p>
+
+        <div class="mt-6 flex justify-end gap-3">
+          <button
+            class="border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-slate-500 disabled:opacity-50"
+            :disabled="deleting"
+            @click="showDeleteConfirm = false"
+          >
+            ביטול
+          </button>
+          <button
+            class="bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="deleting"
+            @click="resetAccount"
+          >
+            {{ deleting ? 'מוחק…' : 'כן, מחק הכל' }}
           </button>
         </div>
       </div>
