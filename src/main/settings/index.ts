@@ -84,7 +84,10 @@ export function updateSettings(patch: Partial<Settings>): Settings {
     setSetting(KEY_TAX_ID, coerceTaxId(patch.taxId) ?? '')
   }
   if (patch.onboardingComplete !== undefined) {
-    setSetting(KEY_ONBOARDING_COMPLETE, coerceOnboardingComplete(patch.onboardingComplete) ? '1' : '0')
+    setSetting(
+      KEY_ONBOARDING_COMPLETE,
+      coerceOnboardingComplete(patch.onboardingComplete) ? '1' : '0'
+    )
   }
   return getSettings()
 }

@@ -452,7 +452,11 @@ export async function downloadApproved(
         // Remove the file we just wrote so nothing is stranded on disk.
         if (invoice.engineType === 'deterministic' && invoice.amount === null) {
           summary.rejected++
-          try { await unlink(task.targetPath) } catch {}
+          try {
+            await unlink(task.targetPath)
+          } catch {
+            /* file may not exist yet — ignore */
+          }
           return
         }
 

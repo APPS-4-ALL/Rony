@@ -471,16 +471,14 @@ onMounted(() => guarded(load))
     <!-- Danger zone -->
     <section class="rounded-none border border-red-900/60 bg-red-950/10 p-6">
       <h2 class="text-lg font-semibold text-red-300">אזור מסוכן</h2>
-      <p class="mt-1 text-sm text-slate-400">
-        פעולות בלתי הפיכות. קרא/י בעיון לפני שמבצע/ת.
-      </p>
+      <p class="mt-1 text-sm text-slate-400">פעולות בלתי הפיכות. קרא/י בעיון לפני שמבצע/ת.</p>
 
       <div class="mt-5 flex flex-wrap items-start justify-between gap-4">
         <div>
           <p class="text-sm font-medium text-slate-200">מחיקת כל הנתונים והרישום</p>
           <p class="mt-1 text-sm text-slate-500">
-            מוחק את כל החשבוניות, מנתק את Gmail, מוחק מפתחות API ומאפס את האפליקציה לגמרי.
-            בפתיחה הבאה תוצג מסך ההרשמה מחדש.
+            מוחק את כל החשבוניות, מנתק את Gmail, מוחק מפתחות API ומאפס את האפליקציה לגמרי. בפתיחה
+            הבאה תוצג מסך ההרשמה מחדש.
           </p>
         </div>
         <button
@@ -535,11 +533,15 @@ onMounted(() => guarded(load))
       v-if="showDeleteConfirm"
       class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4"
     >
-      <div class="w-full max-w-md rounded-none border border-red-700/60 bg-slate-900 p-6 shadow-2xl">
+      <div
+        class="w-full max-w-md rounded-none border border-red-700/60 bg-slate-900 p-6 shadow-2xl"
+      >
         <h3 class="text-lg font-bold text-red-300">מחיקת כל הנתונים</h3>
         <p class="mt-3 text-sm text-slate-300">פעולה זו תמחק לצמיתות:</p>
         <ul class="mt-2 space-y-1.5 text-sm text-slate-400">
-          <li class="flex gap-2"><span class="text-red-400">•</span> את כל רשומות החשבוניות וקבצי ההורדה</li>
+          <li class="flex gap-2">
+            <span class="text-red-400">•</span> את כל רשומות החשבוניות וקבצי ההורדה
+          </li>
           <li class="flex gap-2"><span class="text-red-400">•</span> את חיבור ה‑Gmail</li>
           <li class="flex gap-2"><span class="text-red-400">•</span> את מפתחות ה‑API השמורים</li>
           <li class="flex gap-2"><span class="text-red-400">•</span> את פרטי העסק וכל ההגדרות</li>
