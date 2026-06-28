@@ -178,7 +178,7 @@ onUnmounted(() => {
 <template>
   <div class="min-h-full bg-slate-950 text-slate-100">
     <OnboardingView v-if="showOnboarding" @done="onOnboardingDone" />
-    <div class="mx-auto max-w-5xl px-6 py-10">
+    <div v-else class="mx-auto max-w-5xl px-6 py-10">
       <!-- Header -->
       <header class="mb-10">
         <div class="flex items-center justify-between gap-3">

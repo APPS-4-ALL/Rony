@@ -116,10 +116,8 @@ async function finish(): Promise<void> {
 </script>
 
 <template>
-  <div
-    class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-950 px-4"
-    dir="rtl"
-  >
+  <div class="fixed inset-0 z-50 overflow-y-auto bg-slate-950" dir="rtl">
+  <div class="flex min-h-full flex-col items-center justify-center px-4 py-8">
     <!-- Progress dots -->
     <div class="mb-10 flex items-center gap-2">
       <div
@@ -263,10 +261,11 @@ async function finish(): Promise<void> {
           <div class="border border-slate-800 bg-slate-900/60 p-4">
             <div class="flex items-start justify-between gap-4">
               <div>
-                <p class="text-sm font-medium text-slate-200">ספירת התקנות אנונימית</p>
+                <p class="text-sm font-medium text-slate-200">עדכונים אוטומטיים וספירת התקנות</p>
                 <p class="mt-1 text-xs text-slate-500">
-                  שליחת פינג חד‑פעמי אנונימי הכולל: מזהה התקנה אקראי, גרסת האפליקציה ומערכת
-                  ההפעלה בלבד. ללא שם, מייל, נתוני חשבוניות או כל מידע מזהה אחר.
+                  שליחת פינג אנונימי הכולל: מזהה התקנה אקראי, גרסת האפליקציה ומערכת ההפעלה
+                  בלבד. משמש לבדיקת עדכונים לגרסה חדשה של רוני ולספירת התקנות אנונימית.
+                  ללא שם, מייל, נתוני חשבוניות או כל מידע מזהה אחר.
                 </p>
               </div>
               <button
@@ -615,5 +614,6 @@ async function finish(): Promise<void> {
         </button>
       </div>
     </template>
+  </div>
   </div>
 </template>
