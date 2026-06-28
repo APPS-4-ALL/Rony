@@ -427,7 +427,10 @@ onUnmounted(() => {
           >
             {{ scanSummary.errorSample }}
           </p>
-          <p v-if="scanError" class="mt-4 rounded-none bg-red-950/60 px-3 py-2 text-sm text-red-300">
+          <p
+            v-if="scanError"
+            class="mt-4 rounded-none bg-red-950/60 px-3 py-2 text-sm text-red-300"
+          >
             {{ scanError }}
           </p>
         </section>
