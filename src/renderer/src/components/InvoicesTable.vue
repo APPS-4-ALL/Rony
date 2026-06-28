@@ -60,7 +60,7 @@ function statusLabel(status: Invoice['status']): string {
     case 'pending':
       return 'ממתין'
     case 'downloaded':
-      return 'הורד'
+      return 'ירד'
     case 'exported':
       return 'יוצא'
     case 'error':
@@ -171,7 +171,7 @@ async function exportCsv(): Promise<void> {
 </script>
 
 <template>
-  <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
+  <section class="rounded-none border border-slate-800 bg-slate-900/60 p-6">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h2 class="text-lg font-semibold">חשבוניות</h2>
       <div class="flex items-center gap-2">
@@ -179,10 +179,10 @@ async function exportCsv(): Promise<void> {
           v-model="search"
           type="search"
           placeholder="סינון לפי ספק, תאריך, סכום…"
-          class="w-64 rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:outline-none"
+          class="w-64 rounded-none border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:outline-none"
         />
         <button
-          class="rounded-lg border border-slate-700 px-3 py-1.5 text-sm font-semibold text-slate-200 transition hover:border-emerald-500 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+          class="rounded-none border border-slate-700 px-3 py-1.5 text-sm font-semibold text-slate-200 transition hover:border-emerald-500 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="exporting || rows.length === 0"
           :title="rows.length === 0 ? 'אין מה לייצא' : 'ייצוא השורות המוצגות לקובץ CSV'"
           @click="exportCsv"
@@ -190,7 +190,7 @@ async function exportCsv(): Promise<void> {
           {{ exporting ? 'מייצא…' : 'ייצוא ל-CSV' }}
         </button>
         <button
-          class="rounded-lg border border-red-900/70 px-3 py-1.5 text-sm font-semibold text-red-300 transition hover:border-red-500 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-50"
+          class="rounded-none border border-red-900/70 px-3 py-1.5 text-sm font-semibold text-red-300 transition hover:border-red-500 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-50"
           :disabled="deletingAll || props.invoices.length === 0"
           :title="props.invoices.length === 0 ? 'אין מה למחוק' : 'מחיקת כל החשבוניות והקבצים'"
           @click="removeAll"
@@ -239,7 +239,7 @@ async function exportCsv(): Promise<void> {
           <td class="w-12 px-2 py-2">
             <span
               v-if="showBadgeFor(inv)"
-              class="rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300"
+              class="rounded-none bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300"
             >
               חדש
             </span>
@@ -285,7 +285,7 @@ async function exportCsv(): Promise<void> {
           <td class="py-2 px-3 font-mono">{{ formatAmount(inv.amount, inv.currency) }}</td>
           <td class="py-2 px-3">
             <span
-              class="inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium"
+              class="inline-block whitespace-nowrap rounded-none px-2 py-0.5 text-xs font-medium"
               :class="
                 inv.engineType === 'ai'
                   ? 'bg-violet-500/15 text-violet-300'
@@ -305,7 +305,7 @@ async function exportCsv(): Promise<void> {
               <!-- File on disk → open it; body-only receipt → view the email; else disabled. -->
               <button
                 v-if="inv.localFilePath"
-                class="whitespace-nowrap rounded-md border border-slate-700 px-2.5 py-1 text-xs font-medium text-slate-200 transition hover:border-emerald-500 hover:text-emerald-300"
+                class="whitespace-nowrap rounded-none border border-slate-700 px-2.5 py-1 text-xs font-medium text-slate-200 transition hover:border-emerald-500 hover:text-emerald-300"
                 :title="inv.localFilePath"
                 @click="openFile(inv)"
               >
@@ -313,7 +313,7 @@ async function exportCsv(): Promise<void> {
               </button>
               <button
                 v-else-if="inv.emailBody"
-                class="whitespace-nowrap rounded-md border border-slate-700 px-2.5 py-1 text-xs font-medium text-slate-200 transition hover:border-emerald-500 hover:text-emerald-300"
+                class="whitespace-nowrap rounded-none border border-slate-700 px-2.5 py-1 text-xs font-medium text-slate-200 transition hover:border-emerald-500 hover:text-emerald-300"
                 title="הצגת תוכן המייל"
                 @click="viewingEmail = inv"
               >
@@ -321,14 +321,14 @@ async function exportCsv(): Promise<void> {
               </button>
               <button
                 v-else
-                class="cursor-not-allowed whitespace-nowrap rounded-md border border-slate-700 px-2.5 py-1 text-xs font-medium text-slate-200 opacity-40"
+                class="cursor-not-allowed whitespace-nowrap rounded-none border border-slate-700 px-2.5 py-1 text-xs font-medium text-slate-200 opacity-40"
                 disabled
                 title="טרם הורד"
               >
                 פתיחת קובץ
               </button>
               <button
-                class="rounded-md border border-slate-700 p-1.5 text-slate-300 transition hover:border-red-500 hover:text-red-300"
+                class="rounded-none border border-slate-700 p-1.5 text-slate-300 transition hover:border-red-500 hover:text-red-300"
                 title="מחיקת החשבונית והקובץ"
                 aria-label="מחיקה"
                 @click="removeInvoice(inv)"
@@ -356,10 +356,10 @@ async function exportCsv(): Promise<void> {
       </tbody>
     </table>
 
-    <p v-if="actionError" class="mt-4 rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">
+    <p v-if="actionError" class="mt-4 rounded-none bg-red-950/60 px-3 py-2 text-sm text-red-300">
       {{ actionError }}
     </p>
-    <p v-if="exportNote" class="mt-4 rounded-lg bg-slate-800/60 px-3 py-2 text-sm text-slate-300">
+    <p v-if="exportNote" class="mt-4 rounded-none bg-slate-800/60 px-3 py-2 text-sm text-slate-300">
       {{ exportNote }}
     </p>
 
@@ -370,7 +370,7 @@ async function exportCsv(): Promise<void> {
       @click.self="viewingEmail = null"
     >
       <div
-        class="flex max-h-[80vh] w-full max-w-2xl flex-col rounded-xl border border-slate-700 bg-slate-900 text-start shadow-xl"
+        class="flex max-h-[80vh] w-full max-w-2xl flex-col rounded-none border border-slate-700 bg-slate-900 text-start shadow-xl"
       >
         <div class="flex items-center justify-between gap-4 border-b border-slate-800 px-5 py-3">
           <div>
@@ -380,7 +380,7 @@ async function exportCsv(): Promise<void> {
             <p class="text-xs text-slate-500">תוכן הקבלה מתוך גוף המייל</p>
           </div>
           <button
-            class="rounded-md border border-slate-700 px-3 py-1 text-sm text-slate-200 transition hover:border-emerald-500 hover:text-emerald-300"
+            class="rounded-none border border-slate-700 px-3 py-1 text-sm text-slate-200 transition hover:border-emerald-500 hover:text-emerald-300"
             @click="viewingEmail = null"
           >
             סגירה

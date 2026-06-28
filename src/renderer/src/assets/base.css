@@ -31,6 +31,31 @@
   --color-text: var(--ev-c-text-1);
 }
 
+/* ─── Palette — dark mode (default) ─── */
+:root {
+  --color-slate-950: #121212;
+  --color-slate-900: #1e1e1e;
+  --color-slate-800: #2a2a2a;
+  --color-slate-700: #383838;
+  --color-slate-600: #505050;
+  --color-slate-500: #707075;
+  --color-slate-400: #a0a0a5;
+  --color-slate-300: #c0c0c4;
+  --color-slate-200: #d5d5d8;
+  --color-slate-100: #f5f5f7;
+  --color-slate-50:  #f8f8fa;
+
+  --color-emerald-500: #34d399;
+  --color-emerald-400: #4ee3a8;
+  --color-emerald-300: #6eedc0;
+  --color-emerald-200: #9ef5d8;
+
+  --color-red-950: #2d0a0a;
+  --color-red-900: #450d0d;
+  --color-red-300: #f87171;
+  --color-red-200: #fca5a5;
+}
+
 *,
 *::before,
 *::after {
@@ -49,17 +74,7 @@ body {
   background: var(--color-background);
   line-height: 1.6;
   font-family:
-    Inter,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    Roboto,
-    Oxygen,
-    Ubuntu,
-    Cantarell,
-    'Fira Sans',
-    'Droid Sans',
-    'Helvetica Neue',
+    'Assistant',
     sans-serif;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;

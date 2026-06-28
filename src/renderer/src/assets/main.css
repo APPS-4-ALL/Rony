@@ -16,32 +16,34 @@
 .light {
   color-scheme: light;
 
-  --color-slate-50: oklch(12.9% 0.042 264.695);
-  --color-slate-100: oklch(20.8% 0.042 265.755);
-  --color-slate-200: oklch(27.9% 0.041 260.031);
-  --color-slate-300: oklch(37.2% 0.044 257.287);
-  --color-slate-400: oklch(44.6% 0.043 257.281);
-  --color-slate-500: oklch(55.4% 0.046 257.417);
-  --color-slate-600: oklch(70.4% 0.04 256.788);
-  --color-slate-700: oklch(86.9% 0.022 252.894);
-  --color-slate-800: oklch(92.9% 0.013 255.508);
-  --color-slate-900: oklch(96.8% 0.007 247.896);
-  --color-slate-950: oklch(98.4% 0.003 247.858);
+  /* ─── Palette — light mode ─── */
+  --color-slate-950: #fafafa;
+  --color-slate-900: #ffffff;
+  --color-slate-800: #f0f0f0;
+  --color-slate-700: #dedede;
+  --color-slate-600: #c0c0c0;
+  --color-slate-500: #8a8a8f;
+  --color-slate-400: #5f6368;
+  --color-slate-300: #3d3d42;
+  --color-slate-200: #2a2a2e;
+  --color-slate-100: #1a1a1a;
+  --color-slate-50:  #0d0d0d;
 
-  /* Emerald text reads too light on white — darken it; the primary button
-     (bg-emerald-500) stays vibrant. */
-  --color-emerald-200: oklch(50.8% 0.118 165.612);
-  --color-emerald-300: oklch(50.8% 0.118 165.612);
-  --color-emerald-400: oklch(59.6% 0.145 163.223);
+  /* Success — deep green */
+  --color-emerald-500: #137333;
+  --color-emerald-400: #1a9040;
+  --color-emerald-300: #137333;
+  --color-emerald-200: #137333;
 
-  /* Error / warning boxes use *-950 backgrounds with light text — flip them to
-     light-tinted boxes with dark text. */
-  --color-red-950: oklch(93.6% 0.032 17.717);
-  --color-red-900: oklch(88.5% 0.062 18.334);
-  --color-red-300: oklch(50.5% 0.213 27.518);
-  --color-red-200: oklch(44.4% 0.177 26.899);
-  --color-amber-950: oklch(96.2% 0.059 95.617);
-  --color-amber-300: oklch(55.5% 0.163 48.998);
+  /* Error — deep red; flip *-950 to light tint, text to dark */
+  --color-red-950: #fdecea;
+  --color-red-900: #fad4d0;
+  --color-red-300: #c5221f;
+  --color-red-200: #9d1b19;
+
+  /* Warning — darken for legibility on white */
+  --color-amber-950: #fff3e0;
+  --color-amber-300: #b06000;
 }
 
 html,

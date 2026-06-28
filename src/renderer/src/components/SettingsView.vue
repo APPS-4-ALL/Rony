@@ -177,12 +177,12 @@ onMounted(() => guarded(load))
 <template>
   <div class="space-y-6">
     <!-- Gmail connection -->
-    <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
+    <section class="rounded-none border border-slate-800 bg-slate-900/60 p-6">
       <h2 class="text-lg font-semibold">חיבור ל-Gmail</h2>
 
       <div class="mt-4 flex flex-wrap items-center justify-between gap-4">
         <div class="flex items-center gap-3">
-          <span class="inline-block h-2.5 w-2.5 rounded-full" :class="conn.badgeColor" />
+          <span class="inline-block h-2.5 w-2.5 rounded-none" :class="conn.badgeColor" />
           <div>
             <p class="font-medium" :class="conn.textColor">
               {{ conn.connected ? 'מחובר' : 'מנותק' }}
@@ -195,7 +195,7 @@ onMounted(() => guarded(load))
 
         <button
           v-if="conn.connected"
-          class="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-red-500 hover:text-red-300 disabled:opacity-50"
+          class="rounded-none border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-red-500 hover:text-red-300 disabled:opacity-50"
           :disabled="busy"
           @click="onLogout"
         >
@@ -203,7 +203,7 @@ onMounted(() => guarded(load))
         </button>
         <button
           v-else
-          class="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-50"
+          class="rounded-none bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-50"
           :disabled="busy"
           @click="onLogin"
         >
@@ -217,7 +217,7 @@ onMounted(() => guarded(load))
     </section>
 
     <!-- Download folder (optional) -->
-    <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
+    <section class="rounded-none border border-slate-800 bg-slate-900/60 p-6">
       <h2 class="text-lg font-semibold">תיקיית הורדות</h2>
       <p class="mt-1 text-sm text-slate-400">
         היכן לשמור את קובצי החשבוניות שיורדו. אופציונלי — כברירת מחדל הם נשמרים בתיקיית המסמכים.
@@ -233,7 +233,7 @@ onMounted(() => guarded(load))
 
       <div class="mt-3 flex flex-wrap items-center gap-2">
         <button
-          class="rounded-lg bg-emerald-500 px-4 py-1.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-50"
+          class="rounded-none bg-emerald-500 px-4 py-1.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-50"
           :disabled="busy"
           @click="chooseFolder"
         >
@@ -241,7 +241,7 @@ onMounted(() => guarded(load))
         </button>
         <button
           v-if="settings.downloadDir"
-          class="rounded-lg border border-slate-700 px-3 py-1.5 text-sm font-medium text-slate-200 transition hover:border-red-500 hover:text-red-300 disabled:opacity-50"
+          class="rounded-none border border-slate-700 px-3 py-1.5 text-sm font-medium text-slate-200 transition hover:border-red-500 hover:text-red-300 disabled:opacity-50"
           :disabled="busy"
           @click="resetFolder"
         >
@@ -251,7 +251,7 @@ onMounted(() => guarded(load))
     </section>
 
     <!-- Anonymous install count (RONY-20) — opt-in -->
-    <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
+    <section class="rounded-none border border-slate-800 bg-slate-900/60 p-6">
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="max-w-xl">
           <h2 class="text-lg font-semibold">אני מאשר שידעו שהתקנתי את רוני</h2>
@@ -269,13 +269,13 @@ onMounted(() => guarded(load))
           role="switch"
           dir="ltr"
           :aria-checked="settings.installConsent"
-          class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition disabled:opacity-50"
+          class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-none transition disabled:opacity-50"
           :class="settings.installConsent ? 'bg-emerald-500' : 'bg-slate-700'"
           :disabled="busy"
           @click="toggleInstallConsent"
         >
           <span
-            class="inline-block h-4 w-4 transform rounded-full bg-white transition"
+            class="inline-block h-4 w-4 transform rounded-none bg-white transition"
             :class="settings.installConsent ? 'translate-x-6' : 'translate-x-1'"
           />
         </button>
@@ -286,7 +286,7 @@ onMounted(() => guarded(load))
     </section>
 
     <!-- Follow invoice download links (RONY-18) — opt-in -->
-    <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
+    <section class="rounded-none border border-slate-800 bg-slate-900/60 p-6">
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="max-w-xl">
           <h2 class="text-lg font-semibold">הורדת חשבוניות מקישור</h2>
@@ -303,13 +303,13 @@ onMounted(() => guarded(load))
           role="switch"
           dir="ltr"
           :aria-checked="settings.followLinks"
-          class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition disabled:opacity-50"
+          class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-none transition disabled:opacity-50"
           :class="settings.followLinks ? 'bg-emerald-500' : 'bg-slate-700'"
           :disabled="busy"
           @click="toggleFollowLinks"
         >
           <span
-            class="inline-block h-4 w-4 transform rounded-full bg-white transition"
+            class="inline-block h-4 w-4 transform rounded-none bg-white transition"
             :class="settings.followLinks ? 'translate-x-6' : 'translate-x-1'"
           />
         </button>
@@ -321,7 +321,7 @@ onMounted(() => guarded(load))
     </section>
 
     <!-- Default scan engine -->
-    <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
+    <section class="rounded-none border border-slate-800 bg-slate-900/60 p-6">
       <h2 class="text-lg font-semibold">מנוע סריקה כברירת מחדל</h2>
       <p class="mt-1 text-sm text-slate-400">
         איזה מנוע ירוץ כברירת מחדל כשתסרוק. ניתן לשנות זאת בכל עת.
@@ -331,7 +331,7 @@ onMounted(() => guarded(load))
         <button
           v-for="opt in ENGINE_OPTIONS"
           :key="opt.value"
-          class="rounded-lg border p-4 text-start transition disabled:opacity-50"
+          class="rounded-none border p-4 text-start transition disabled:opacity-50"
           :class="
             settings.defaultEngine === opt.value
               ? 'border-emerald-500 bg-emerald-500/10'
@@ -354,7 +354,7 @@ onMounted(() => guarded(load))
     </section>
 
     <!-- AI provider + API key (RONY-16) — only when the AI engine is selected -->
-    <section v-if="showAi" class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
+    <section v-if="showAi" class="rounded-none border border-slate-800 bg-slate-900/60 p-6">
       <h2 class="text-lg font-semibold">ספק בינה מלאכותית ומפתח API</h2>
       <p class="mt-1 text-sm text-slate-400">
         מנוע ה-AI שולח את טקסט המייל לספק שבחרת. המפתח שלך נשמר
@@ -366,7 +366,7 @@ onMounted(() => guarded(load))
         <button
           v-for="p in PROVIDER_OPTIONS"
           :key="p.value"
-          class="rounded-lg border px-3 py-1.5 text-sm font-medium transition disabled:opacity-50"
+          class="rounded-none border px-3 py-1.5 text-sm font-medium transition disabled:opacity-50"
           :class="
             settings.aiProvider === p.value
               ? 'border-emerald-500 bg-emerald-500/10 text-emerald-200'
@@ -387,10 +387,10 @@ onMounted(() => guarded(load))
           type="password"
           autocomplete="off"
           :placeholder="apiKeySet ? '•••••••• (מפתח שמור)' : 'הדבק/י את מפתח ה-API'"
-          class="w-72 rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:outline-none"
+          class="w-72 rounded-none border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-emerald-500 focus:outline-none"
         />
         <button
-          class="rounded-lg bg-emerald-500 px-4 py-1.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-50"
+          class="rounded-none bg-emerald-500 px-4 py-1.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-50"
           :disabled="busy || !apiKeyInput.trim()"
           @click="saveApiKey"
         >
@@ -398,7 +398,7 @@ onMounted(() => guarded(load))
         </button>
         <button
           v-if="apiKeySet"
-          class="rounded-lg border border-slate-700 px-3 py-1.5 text-sm font-medium text-slate-200 transition hover:border-red-500 hover:text-red-300 disabled:opacity-50"
+          class="rounded-none border border-slate-700 px-3 py-1.5 text-sm font-medium text-slate-200 transition hover:border-red-500 hover:text-red-300 disabled:opacity-50"
           :disabled="busy"
           @click="clearKey"
         >
@@ -420,7 +420,7 @@ onMounted(() => guarded(load))
           מזהים רגישים (טלפון, דוא"ל, מספרי חשבון/כרטיס, ת"ז) מוסתרים אוטומטית מהטקסט לפני השליחה.
         </p>
         <button
-          class="mt-2 rounded-lg border border-slate-700 px-3 py-1.5 text-sm font-medium text-slate-200 transition hover:border-red-500 hover:text-red-300 disabled:opacity-50"
+          class="mt-2 rounded-none border border-slate-700 px-3 py-1.5 text-sm font-medium text-slate-200 transition hover:border-red-500 hover:text-red-300 disabled:opacity-50"
           :disabled="busy"
           @click="revokeConsent"
         >
@@ -429,7 +429,7 @@ onMounted(() => guarded(load))
       </div>
     </section>
 
-    <p v-if="error" class="rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">
+    <p v-if="error" class="rounded-none bg-red-950/60 px-3 py-2 text-sm text-red-300">
       {{ error }}
     </p>
 
@@ -441,7 +441,7 @@ onMounted(() => guarded(load))
       class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4"
       @click.self="cancelConsent"
     >
-      <div class="w-full max-w-lg rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+      <div class="w-full max-w-lg rounded-none border border-slate-700 bg-slate-900 p-6 shadow-2xl">
         <h3 class="text-lg font-bold text-slate-100">{{ consentTitle }}</h3>
         <p class="mt-2 text-sm text-slate-400">
           הסריקה החכמה משתמשת בשירות חיצוני. לפני ההפעלה, חשוב שתדע/י:
@@ -454,14 +454,14 @@ onMounted(() => guarded(load))
         </ul>
         <div class="mt-6 flex flex-wrap justify-end gap-2">
           <button
-            class="rounded-lg border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-slate-500 disabled:opacity-50"
+            class="rounded-none border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-slate-500 disabled:opacity-50"
             :disabled="busy"
             @click="cancelConsent"
           >
             ביטול
           </button>
           <button
-            class="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-50"
+            class="rounded-none bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:opacity-50"
             :disabled="busy"
             @click="confirmConsent"
           >

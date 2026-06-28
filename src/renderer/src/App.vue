@@ -174,7 +174,7 @@ onUnmounted(() => {
             <img
               :src="logoUrl"
               alt="רוני"
-              class="h-12 w-12 rounded-2xl object-cover shadow-lg shadow-emerald-500/20"
+              class="h-12 w-12 object-cover shadow-lg shadow-emerald-500/20"
             />
             <div>
               <p class="text-lg font-bold leading-none text-slate-100">רוני</p>
@@ -187,7 +187,7 @@ onUnmounted(() => {
           <!-- Dark / light theme toggle -->
           <button
             type="button"
-            class="rounded-lg border border-slate-700 p-2.5 text-slate-300 transition hover:border-slate-500 hover:text-slate-100"
+            class="rounded-none border border-slate-700 p-2.5 text-slate-300 transition hover:border-slate-500 hover:text-slate-100"
             :title="theme === 'dark' ? 'מצב בהיר' : 'מצב כהה'"
             :aria-label="theme === 'dark' ? 'עבור למצב בהיר' : 'עבור למצב כהה'"
             @click="toggleTheme"
@@ -254,7 +254,7 @@ onUnmounted(() => {
 
       <template v-else>
         <!-- Scan now (RONY-14) — triggers the Gmail sync pipeline over IPC -->
-        <section class="mt-6 rounded-xl border border-slate-800 bg-slate-900/60 p-6">
+        <section class="mt-6 rounded-none border border-slate-800 bg-slate-900/60 p-6">
           <div class="flex flex-wrap items-center justify-between gap-4">
             <div>
               <h2 class="text-lg font-semibold">סריקת תיבת הדואר</h2>
@@ -264,7 +264,7 @@ onUnmounted(() => {
             </div>
             <div class="flex items-center gap-3">
               <button
-                class="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
+                class="inline-flex items-center gap-2 rounded-none bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
                 :disabled="scanning"
                 @click="onScan"
               >
@@ -294,7 +294,7 @@ onUnmounted(() => {
               <!-- Cancel: shown only mid-scan; stops the run cooperatively. -->
               <button
                 v-if="scanning"
-                class="inline-flex items-center gap-2 rounded-lg border border-red-500/60 px-4 py-2.5 text-sm font-semibold text-red-300 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                class="inline-flex items-center gap-2 rounded-none border border-red-500/60 px-4 py-2.5 text-sm font-semibold text-red-300 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
                 :disabled="cancelling"
                 @click="onCancelScan"
               >
@@ -314,7 +314,7 @@ onUnmounted(() => {
                   :key="n"
                   type="button"
                   :disabled="scanning"
-                  class="rounded-lg border px-3 py-1.5 text-sm font-medium transition disabled:opacity-50"
+                  class="rounded-none border px-3 py-1.5 text-sm font-medium transition disabled:opacity-50"
                   :class="
                     scanMax === n
                       ? 'border-emerald-500 bg-emerald-500/10 text-emerald-200'
@@ -336,7 +336,7 @@ onUnmounted(() => {
                   :key="preset.key"
                   type="button"
                   :disabled="scanning"
-                  class="rounded-lg border px-3 py-1.5 text-sm font-medium transition disabled:opacity-50"
+                  class="rounded-none border px-3 py-1.5 text-sm font-medium transition disabled:opacity-50"
                   :class="
                     rangePreset === preset.key
                       ? 'border-emerald-500 bg-emerald-500/10 text-emerald-200'
@@ -356,7 +356,7 @@ onUnmounted(() => {
                     v-model="scanFrom"
                     type="date"
                     :disabled="scanning"
-                    class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none disabled:opacity-50"
+                    class="rounded-none border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none disabled:opacity-50"
                   />
                 </label>
                 <label class="text-sm text-slate-400">
@@ -365,7 +365,7 @@ onUnmounted(() => {
                     v-model="scanTo"
                     type="date"
                     :disabled="scanning"
-                    class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none disabled:opacity-50"
+                    class="rounded-none border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-100 focus:border-emerald-500 focus:outline-none disabled:opacity-50"
                   />
                 </label>
               </div>
@@ -380,7 +380,7 @@ onUnmounted(() => {
             <p class="text-sm text-slate-300">{{ progressLabel(scanProgress) }}</p>
             <div
               v-if="scanProgress.total > 0"
-              class="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-800"
+              class="mt-2 h-1.5 w-full overflow-hidden rounded-none bg-slate-800"
             >
               <div
                 class="h-full bg-emerald-500 transition-all"
@@ -393,7 +393,7 @@ onUnmounted(() => {
 
           <p
             v-if="scanSummary"
-            class="mt-4 rounded-lg bg-slate-800/60 px-3 py-2 text-sm text-slate-300"
+            class="mt-4 rounded-none bg-slate-800/60 px-3 py-2 text-sm text-slate-300"
           >
             <span v-if="scanSummary.cancelled" class="font-semibold text-amber-300"
               >הסריקה בוטלה ·
@@ -411,11 +411,11 @@ onUnmounted(() => {
           </p>
           <p
             v-if="scanSummary && scanSummary.errors > 0 && scanSummary.errorSample"
-            class="mt-2 rounded-lg bg-amber-950/40 px-3 py-2 text-xs text-amber-300"
+            class="mt-2 rounded-none bg-amber-950/40 px-3 py-2 text-xs text-amber-300"
           >
             {{ scanSummary.errorSample }}
           </p>
-          <p v-if="scanError" class="mt-4 rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">
+          <p v-if="scanError" class="mt-4 rounded-none bg-red-950/60 px-3 py-2 text-sm text-red-300">
             {{ scanError }}
           </p>
         </section>

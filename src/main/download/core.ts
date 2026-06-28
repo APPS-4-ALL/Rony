@@ -6,7 +6,7 @@
  * store. Pure + dependency-injected — NO Electron / network / SQLite imports —
  * so it is fully unit-testable. The real wiring lives in ./index.ts.
  */
-import { access, mkdir, writeFile } from 'node:fs/promises'
+import { access, mkdir, unlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 import {
@@ -447,6 +447,15 @@ export async function downloadApproved(
             }
           }
         }
+        // A deterministic match with no extractable amount is almost certainly
+        // not a real invoice (e.g. a promo image that happened to match a keyword).
+        // Remove the file we just wrote so nothing is stranded on disk.
+        if (invoice.engineType === 'deterministic' && invoice.amount === null) {
+          summary.rejected++
+          try { await unlink(task.targetPath) } catch {}
+          return
+        }
+
         // New file: record it. A false return means a concurrent scan won the race.
         if (deps.store.insert(invoice)) summary.downloaded++
         else summary.skipped++
