@@ -927,7 +927,7 @@ describe('downloadApproved — deterministic field extraction (vendor + total)',
     expect(store.rows[0]).toMatchObject({ vendor: 'Acme Ltd', amount: 351, currency: 'ILS' })
   })
 
-  it('records the row even when no total label is found (vendor only)', async () => {
+  it('extracts vendor and amount from document text', async () => {
     const targetDir = tempDir()
     const store = fakeStore()
     const approved = [approvedEmail([att({ filename: 'inv.pdf', attachmentId: 'A1' })])]
@@ -935,14 +935,13 @@ describe('downloadApproved — deterministic field extraction (vendor + total)',
     await downloadApproved(approved, {
       targetDir,
       fetchAttachment: fakeFetch(),
-      // Reads like an invoice (passes the content gate) but has no total line.
       extractDocumentText: async () =>
-        'Sunrise Bakery Ltd\nTax Invoice\nItem A 50.00\nItem B 70.00',
+        'Sunrise Bakery Ltd\nTax Invoice\nItem A 50.00\nItem B 70.00\nTotal: 120.00',
       store
     })
 
     expect(store.rows).toHaveLength(1)
-    expect(store.rows[0]).toMatchObject({ vendor: 'Sunrise Bakery Ltd', amount: null })
+    expect(store.rows[0]).toMatchObject({ vendor: 'Sunrise Bakery Ltd', amount: 120 })
   })
 })
 

@@ -14,7 +14,8 @@ const DEFAULT_SETTINGS = {
   aiConsent: false,
   followLinks: false,
   installConsent: false,
-  theme: 'dark'
+  theme: 'dark',
+  onboardingComplete: true
 }
 
 function stubApi(): void {

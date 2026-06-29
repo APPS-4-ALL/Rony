@@ -421,6 +421,7 @@ export async function downloadApproved(
         // scan / photo / image-only PDF) we fall back to OCR. If both come up
         // empty the fields stay null — visibly flagged for review.
         let invoice = task.invoice
+        let readableText: string | null = null
         if (invoice.engineType === 'deterministic') {
           let text = documentText
           if ((!text || !text.trim()) && deps.ocrDocument) {
@@ -438,6 +439,7 @@ export async function downloadApproved(
             }
           }
           if (text && text.trim()) {
+            readableText = text
             const fields = extractInvoiceFields(text)
             invoice = {
               ...invoice,
@@ -447,10 +449,15 @@ export async function downloadApproved(
             }
           }
         }
-        // A deterministic match with no extractable amount is almost certainly
-        // not a real invoice (e.g. a promo image that happened to match a keyword).
-        // Remove the file we just wrote so nothing is stranded on disk.
-        if (invoice.engineType === 'deterministic' && invoice.amount === null) {
+        // Reject only when we successfully read text from the document but still
+        // found no amount — that means it's probably not an invoice. When no text
+        // could be extracted at all (image without OCR, encrypted PDF, no extractor
+        // configured) we can't make the call, so we keep the file.
+        if (
+          invoice.engineType === 'deterministic' &&
+          invoice.amount === null &&
+          readableText !== null
+        ) {
           summary.rejected++
           try {
             await unlink(task.targetPath)
