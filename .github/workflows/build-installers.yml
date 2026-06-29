@@ -42,7 +42,7 @@ jobs:
             name: macos
             script: build:mac
             artifact: dist/*.dmg
-            extra_args: '--arch universal'
+            extra_args: '--universal'
 
     runs-on: ${{ matrix.os }}
 
