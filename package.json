@@ -1,6 +1,6 @@
 {
   "name": "roni-invoices",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Local-first desktop app to scan, download, and manage invoices and receipts from Gmail.",
   "main": "./out/main/index.js",
   "author": "apps4all",
