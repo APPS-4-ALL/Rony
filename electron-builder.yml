@@ -22,7 +22,7 @@ nsis:
   createDesktopShortcut: always
 mac:
   mergeASARs: true
-  x64ArchFiles: "**/@napi-rs/**/*.node"
+  x64ArchFiles: "**/*.node"
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
     NSCameraUsageDescription: Application requests access to the device's camera.
