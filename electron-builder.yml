@@ -11,6 +11,8 @@ files:
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
 asarUnpack:
   - resources/**
+  - node_modules/@napi-rs/canvas-darwin-*/**
+  - node_modules/better-sqlite3/build/Release/**
 win:
   executableName: roni-invoices
 nsis:
@@ -19,6 +21,8 @@ nsis:
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
 mac:
+  mergeASARs: true
+  singleArchFiles: "node_modules/@napi-rs/**/*.node"
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
     NSCameraUsageDescription: Application requests access to the device's camera.
