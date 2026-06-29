@@ -37,10 +37,12 @@ jobs:
             name: windows
             script: build:win
             artifact: dist/*-setup.exe
+            extra_args: ''
           - os: macos-latest
             name: macos
             script: build:mac
             artifact: dist/*.dmg
+            extra_args: '--arch universal'
 
     runs-on: ${{ matrix.os }}
 
@@ -100,7 +102,7 @@ jobs:
             export CSC_IDENTITY_AUTO_DISCOVERY=false
             echo "Code signing: disabled (no certificate secret) — unsigned build"
           fi
-          npm run ${{ matrix.script }} -- --publish "$PUBLISH"
+          npm run ${{ matrix.script }} -- --publish "$PUBLISH" ${{ matrix.extra_args }}
 
       - name: Upload installer
         uses: actions/upload-artifact@v4
